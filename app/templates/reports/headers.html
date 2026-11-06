@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Saved headers{% endblock %}
+{% block content %}
+<h1>Saved headers</h1>
+<p class="hint">Headers are saved from the New report page ("Save this header as"). Changing a saved header never changes reports already generated.</p>
+<table class="data"><tr><th>Name</th><th>Code</th><th>Organisation</th><th>Division</th><th>Section</th><th>Logo</th><th>Created by</th><th></th></tr>
+{% for h in headers %}<tr><td>{{ h.name }}</td><td>{{ h.division_code }}</td><td>{{ h.organisation }}</td><td>{{ h.division }}</td><td>{{ h.section }}</td>
+  <td>{% if h.logo %}<img class="thumb" src="{{ url_for('reports.header_logo', pk=h.id) }}" alt="logo">{% endif %}</td><td>{{ h.created_by.full_name }}</td>
+  <td>{% if can_manage(h) %}<a href="{{ url_for('reports.header_edit', pk=h.id) }}">Edit</a>{% endif %}</td></tr>
+{% else %}<tr><td colspan="8" class="muted">No saved headers yet.</td></tr>{% endfor %}
+</table>
+{% endblock %}

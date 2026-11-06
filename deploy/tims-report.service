@@ -1,0 +1,23 @@
+# systemd service for TIMS-Report. Installed by deploy/install.sh to
+# /etc/systemd/system/tims-report.service
+[Unit]
+Description=TIMS-Report web application
+After=network.target
+
+[Service]
+Type=simple
+User=tims
+Group=tims
+WorkingDirectory=/opt/tims-report
+EnvironmentFile=/etc/tims-report.env
+ExecStart=/opt/tims-report/.venv/bin/gunicorn --preload --workers 3 --bind 127.0.0.1:8000 --access-logfile - wsgi:app
+Restart=on-failure
+RestartSec=5
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/tims-report /opt/tims-report/elements /opt/tims-report/import_profiles
+
+[Install]
+WantedBy=multi-user.target

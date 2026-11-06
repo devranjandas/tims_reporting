@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if mode == 'edit' else 'New' }} sample{% endblock %}
+{% block content %}
+<h1>{% if mode == 'edit' %}Edit sample {{ sample.sample_id }} <small>version {{ sample.version }}</small>{% else %}New sample{% endif %}</h1>
+{% for e in errors %}<div class="flash error">{{ e }}</div>{% endfor %}
+<form method="post" enctype="multipart/form-data" id="sample-form" data-autosave="{{ 'new-sample' if mode == 'new' else '' }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if sample %}<input type="hidden" name="lock_version" value="{{ sample.lock_version }}">{% endif %}
+  <div class="cols">
+    <section class="card">
+      <h2>Sample</h2>
+      <div class="grid2">
+        <label>Element
+          {% if mode == 'edit' %}<input value="{{ el.name }} ({{ el.symbol }})" disabled><input type="hidden" name="element" value="{{ form.element }}">
+          {% else %}<select name="element" id="element-select" data-url="{{ url_for('samples.new') }}">
+            {% for e in elements %}<option value="{{ e.symbol }}" {% if e.symbol == form.element %}selected{% endif %}>{{ e.name }} ({{ e.symbol }})</option>{% endfor %}
+          </select>{% endif %}
+        </label>
+        <label>Sample ID <input name="sample_id" value="{{ form.sample_id }}" required></label>
+        <label>Sample type
+          <select name="sample_type" id="sample-type">{% for t in sample_types %}<option {% if form.sample_type == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select>
+        </label>
+        <label>Date of analysis <input type="date" name="analysis_date" value="{{ form.analysis_date }}" required></label>
+        <label>Instrument <input name="instrument" value="{{ form.instrument }}"></label>
+        <label>Analyst <input name="analyst_name" value="{{ form.analyst_name }}"></label>
+        <label>Number of measurements (n) <input type="number" min="1" name="n_measurements" value="{{ form.n_measurements }}"></label>
+        <label>Filament / run ID <input name="run_id" value="{{ form.run_id }}"></label>
+      </div>
+      <fieldset class="enriched-only">
+        <legend>Enriched material</legend>
+        <div class="grid2">
+          <label>Enriched isotope
+            <select name="enriched_isotope"><option value="">–</option>{% for a in el.mass_numbers() %}<option value="{{ a }}" {% if form.enriched_isotope == a|string %}selected{% endif %}>{{ a }}{{ el.symbol }}</option>{% endfor %}</select>
+          </label>
+          <label>Batch / material reference <input name="batch_ref" value="{{ form.batch_ref }}"></label>
+          <label>Reference sample ID (optional)
+            <input name="reference_sample" value="{{ form.reference_sample }}" placeholder="default: latest approved sample of the batch">
+          </label>
+        </div>
+      </fieldset>
+      <label>Remarks <textarea name="remarks" rows="2">{{ form.remarks }}</textarea></label>
+    </section>
+    <section class="card">
+      <h2>Import from the instrument</h2>
+      <p class="hint">Paste the instrument text or choose a file, then press <b>Read text</b>. The values fill the table below for you to check.</p>
+      <textarea name="paste" rows="8" placeholder="Yb Nat&#10;170/173&#10;0.185665&#10;334.298435&#10;..."></textarea>
+      <div class="row">
+        <input type="file" name="import_file" accept=".txt,.csv,.dat,text/plain">
+        <select name="profile"><option value="auto">Detect format</option>{% for p in profiles %}<option>{{ p.name }}</option>{% endfor %}</select>
+        <button name="action" value="parse" formnovalidate>Read text</button>
+      </div>
+      {% if parsed and parsed.unread %}
+      <div class="flash error">These lines could not be read:
+        <ul>{% for n, ln in parsed.unread %}<li>line {{ n }}: <code>{{ ln }}</code></li>{% endfor %}</ul></div>
+      {% endif %}
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>Measured ratios</h2>
+    <p class="hint">Reference isotope: {{ iso_html(el.reference_isotope, el.symbol) }}. Expected ratios: {{ el.expected_labels()|join(', ') }}.
+      {% if el.unmeasured_isotopes == 'assume_natural' %}Isotopes not measured are set to their natural ratio.{% endif %}</p>
+    <label class="inline">RSD unit
+      <select name="rsd_unit">
+        <option value="ppm" {% if form.rsd_unit == 'ppm' %}selected{% endif %}>RSD in ppm</option>
+        <option value="percent" {% if form.rsd_unit == 'percent' %}selected{% endif %}>RSD in %</option>
+        <option value="absolute" {% if form.rsd_unit == 'absolute' %}selected{% endif %}>Absolute SD</option>
+      </select>
+    </label>
+    <table class="data entry">
+      <tr><th>Ratio</th><th>Mean ratio</th><th>RSD / SD</th></tr>
+      {% for r in rows %}
+      <tr>
+        <td><input name="label" value="{{ r.label }}" class="lbl" placeholder="e.g. 168/173"></td>
+        <td><input name="value" value="{{ r.value }}" class="num" inputmode="decimal"></td>
+        <td><input name="rsd" value="{{ r.rsd }}" class="num" inputmode="decimal"></td>
+      </tr>
+      {% endfor %}
+    </table>
+  </section>
+  <div class="actions">
+    <button class="primary" name="action" value="save">Save and check</button>
+    {% if sample %}<a href="{{ url_for('samples.view', pk=sample.id) }}">Cancel</a>{% endif %}
+    <span id="restore-box" hidden><button type="button" id="restore-btn">Restore unsaved entry</button></span>
+  </div>
+</form>
+{% endblock %}

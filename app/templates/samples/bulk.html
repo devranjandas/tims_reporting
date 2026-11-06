@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Bulk import{% endblock %}
+{% block content %}
+<h1>Bulk import</h1>
+<p class="hint">Paste text that holds several samples (each starting with a header line such as <code>Yb NAT-01</code>). Each sample is saved as a draft and checked. Use this to load the lab baseline samples.</p>
+<form method="post" enctype="multipart/form-data" class="card">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <textarea name="paste" rows="12"></textarea>
+  <div class="row">
+    <input type="file" name="import_file" accept=".txt,.csv,.dat,text/plain">
+    <select name="profile"><option value="auto">Detect format</option>{% for p in profiles %}<option>{{ p.name }}</option>{% endfor %}</select>
+  </div>
+  <div class="grid3">
+    <label>Sample type <select name="sample_type">{% for t in sample_types if t != 'Enriched' %}<option>{{ t }}</option>{% endfor %}</select></label>
+    <label>Date of analysis <input type="date" name="analysis_date" value="{{ today }}"></label>
+    <label>Instrument <input name="instrument"></label>
+    <label>Number of measurements (n) <input type="number" name="n_measurements" value="30" min="1"></label>
+  </div>
+  <button class="primary">Import</button>
+</form>
+{% if results is not none %}
+<section class="card">
+  <h2>Result</h2>
+  <table class="data"><tr><th>Sample</th><th>Element</th><th>Result</th></tr>
+  {% for r in results %}<tr><td>{% if r|length > 3 %}<a href="{{ url_for('samples.view', pk=r[3]) }}">{{ r[0] }}</a>{% else %}{{ r[0] }}{% endif %}</td><td>{{ r[1] or '–' }}</td><td>{{ r[2] }}</td></tr>
+  {% else %}<tr><td colspan="3" class="muted">No samples found in the text.</td></tr>{% endfor %}
+  </table>
+  {% if unread %}<div class="flash error">Lines not read: <ul>{% for n, ln in unread %}<li>line {{ n }}: <code>{{ ln }}</code></li>{% endfor %}</ul></div>{% endif %}
+</section>
+{% endif %}
+{% endblock %}

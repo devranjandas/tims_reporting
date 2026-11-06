@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<h1>Settings</h1>
+<form method="post" class="card narrow">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <h2>Uncertainty</h2>
+  <label>Coverage factor k (U = k × SD) <input name="coverage_k" value="{{ '%g'|format(v.coverage_k) }}"></label>
+  <label>Correlation between ratios ρ (0 = uncorrelated) <input name="ratio_correlation" value="{{ '%g'|format(v.ratio_correlation) }}"></label>
+  <h2>Reports</h2>
+  <label>First signature label <input name="sig0" value="{{ v.signature_labels[0] }}"></label>
+  <label>Second signature label <input name="sig1" value="{{ v.signature_labels[1] }}"></label>
+  <label>Final statement <input name="footer_statement" value="{{ v.footer_statement }}"></label>
+  <p class="hint">Tolerances for the checks are set per element in the element definition files.</p>
+  <button class="primary">Save</button>
+</form>
+{% endblock %}

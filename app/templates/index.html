@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<h1>Home</h1>
+<div class="tiles">
+  {% for st in ['Draft', 'Submitted', 'Approved', 'Rejected'] %}
+  <a class="tile" href="{{ url_for('samples.index', status=st) }}"><span class="num">{{ counts.get(st, 0) }}</span><span>{{ st }}</span></a>
+  {% endfor %}
+</div>
+<div class="cols">
+  <section class="card">
+    <h2>Waiting for review</h2>
+    {% if to_review %}
+    <table class="data"><tr><th>Sample</th><th>Element</th><th>Submitted</th><th>By</th></tr>
+      {% for s in to_review %}<tr><td><a href="{{ url_for('samples.view', pk=s.id) }}">{{ s.sample_id }}</a></td><td>{{ s.element }}</td><td>{{ s.submitted_at|fdate }}</td><td>{{ s.created_by.full_name }}</td></tr>{% endfor %}
+    </table>
+    {% else %}<p class="muted">Nothing waiting.</p>{% endif %}
+  </section>
+  <section class="card">
+    <h2>My drafts and rejected samples</h2>
+    {% if mine %}
+    <table class="data"><tr><th>Sample</th><th>Element</th><th>Status</th><th>Updated</th></tr>
+      {% for s in mine %}<tr><td><a href="{{ url_for('samples.view', pk=s.id) }}">{{ s.sample_id }}</a></td><td>{{ s.element }}</td><td><span class="badge st-{{ s.status|lower }}">{{ s.status }}</span></td><td>{{ s.updated_at|fdate }}</td></tr>{% endfor %}
+    </table>
+    {% else %}<p class="muted">None.</p>{% endif %}
+  </section>
+</div>
+<section class="card">
+  <h2>Latest reports</h2>
+  {% if reports %}
+  <table class="data"><tr><th>Report ID</th><th>Generated</th><th>Samples</th><th></th></tr>
+    {% for r in reports %}<tr><td>{{ r.report_id }}{% if r.revision %}-R{{ r.revision }}{% endif %} {% if r.draft %}<span class="badge st-draft">DRAFT</span>{% endif %}</td><td>{{ r.created_at|fdate }}</td><td>{{ r.sample_list }}</td><td><a href="{{ url_for('reports.pdf', pk=r.id) }}">PDF</a></td></tr>{% endfor %}
+  </table>
+  {% else %}<p class="muted">No reports yet.</p>{% endif %}
+</section>
+{% endblock %}

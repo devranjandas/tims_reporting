@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Sample {{ s.sample_id }}{% endblock %}
+{% block content %}
+<div class="heading-row">
+  <h1>{{ s.sample_id }} <small>{{ el.name if el else s.element }} · {{ s.sample_type }} · version {{ s.version }}</small>
+    <span class="badge st-{{ s.status|lower }}">{{ s.status }}</span></h1>
+  <div>
+    {% if can_edit %}<a class="button" href="{{ url_for('samples.edit', pk=s.id) }}">Edit</a>{% endif %}
+    <a class="button" href="{{ url_for('samples.history', pk=s.id) }}">History</a>
+    <a class="button" href="{{ url_for('reports.new', sample=s.id) }}">Report</a>
+  </div>
+</div>
+
+<section class="card meta">
+  <dl>
+    <dt>Analysed</dt><dd>{{ s.analysis_date|fdate }}</dd>
+    <dt>Instrument</dt><dd>{{ s.instrument or '–' }}</dd>
+    <dt>Analyst</dt><dd>{{ s.analyst_name or '–' }}</dd>
+    <dt>n</dt><dd>{{ s.n_measurements }}</dd>
+    <dt>Run ID</dt><dd>{{ s.run_id or '–' }}</dd>
+    {% if s.sample_type == 'Enriched' %}<dt>Enriched isotope</dt><dd>{% if s.enriched_isotope %}{{ iso_html(s.enriched_isotope, s.element) }}{% else %}–{% endif %}</dd>
+    <dt>Batch</dt><dd>{{ s.batch_ref or '–' }}</dd>{% endif %}
+    <dt>Entered by</dt><dd>{{ s.created_by.full_name }}, {{ s.created_at|fdate }}</dd>
+    {% if s.reviewed_by %}<dt>Reviewed by</dt><dd>{{ s.reviewed_by.full_name }}, {{ s.reviewed_at|fdate }}{% if s.review_comment %}: “{{ s.review_comment }}”{% endif %}</dd>{% endif %}
+    <dt>Checked against</dt><dd>{{ (s.reference_info or {}).get('natural', '') }} natural values
+      {%- if (s.reference_info or {}).get('baseline_version') %}; lab baseline v{{ s.reference_info.baseline_version }}{% endif %}
+      {%- if (s.reference_info or {}).get('batch') %}; batch reference: {{ s.reference_info.batch }}{% endif %}</dd>
+    {% if s.remarks %}<dt>Remarks</dt><dd>{{ s.remarks }}</dd>{% endif %}
+  </dl>
+</section>
+
+{% if ratio_rows %}
+<section class="card">
+  <h2>Ratios <small>U = {{ '%g'|format(s.results.k) }} × SD</small></h2>
+  <table class="data">
+    <tr><th>Ratio</th><th>Mean</th><th>RSD (ppm)</th><th>SD</th><th>U</th><th>Reported as</th><th>Rel. U (ppm)</th>
+      <th>vs natural</th>{% if baseline %}<th>vs baseline (z)</th>{% endif %}{% if s.sample_type == 'Enriched' %}<th>vs batch</th>{% endif %}<th>Check</th></tr>
+    {% for r in ratio_rows %}{% set p = fmt_pair(r.value, r.U) %}
+    <tr>
+      <td>{{ ratio_html(r.label, s.element) }}</td><td class="n">{{ r.value|sig(7) }}</td><td class="n">{{ '%.1f'|format(r.rsd_ppm) }}</td>
+      <td class="n">{{ r.sd|sig(3) }}</td><td class="n">{{ r.U|sig(3) }}</td><td class="n"><b>{{ p[0] }} ± {{ p[1] }}</b></td>
+      <td class="n">{{ '%.0f'|format(r.rel_U_ppm) }}</td>
+      <td class="n">{% if r.dev_nat is not none %}{{ '%+.2f'|format(r.dev_nat) }} %{% endif %}</td>
+      {% if baseline %}<td class="n">{% if r.z is not none %}{{ '%+.1f'|format(r.z) }}{% else %}–{% endif %}</td>{% endif %}
+      {% if s.sample_type == 'Enriched' %}<td class="n">{% if r.dev_batch is not none %}{{ '%+.2f'|format(r.dev_batch) }} %{% else %}–{% endif %}</td>{% endif %}
+      <td><span class="sev {{ r.status }}">{{ r.status }}</span></td>
+    </tr>{% endfor %}
+  </table>
+</section>
+<section class="card">
+  <h2>Atom %</h2>
+  <table class="data">
+    <tr><th>Isotope</th><th>Atom %</th><th>U</th><th>Reported as</th><th>Natural</th><th>vs natural</th></tr>
+    {% for a in abundance_rows %}{% set p = fmt_pair(a.atom_pct, a.U) %}
+    <tr><td>{{ iso_html(a.isotope, s.element) }}{% if a.assumed %} *{% endif %}</td><td class="n">{{ '%.5f'|format(a.atom_pct) }}</td><td class="n">{{ a.U|sig(3) }}</td>
+      <td class="n"><b>{{ p[0] }} ± {{ p[1] }}</b></td><td class="n">{{ a.natural }}</td><td class="n">{{ '%+.2f'|format(a.dev_nat) }} %</td></tr>
+    {% endfor %}
+    <tr><td>Total</td><td class="n">{{ '%.5f'|format(s.results.sum_pct) }}</td><td colspan="4"></td></tr>
+  </table>
+  {% if s.results.assumed_natural %}<p class="hint">* Not measured: natural ratio assumed.</p>{% endif %}
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Checks</h2>
+  {% if not findings %}<p class="sev OK">No findings.</p>{% endif %}
+  <form method="post" action="{{ url_for('samples.justify', pk=s.id) }}" id="justify-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  </form>
+  <ul class="findings">
+  {% for f in findings %}
+    <li class="finding {{ f.severity }}">
+      <span class="sev {{ f.severity }}">{{ f.severity }}</span> <span class="code">{{ f.code }}</span> {{ f.message }}
+      {% if f.suggestion and can_edit %}
+        <form method="post" action="{{ url_for('samples.accept_suggestion', pk=s.id) }}" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="key" value="{{ f.key }}">
+          <button class="small">Apply this correction</button>
+        </form>
+      {% endif %}
+      {% if f.severity == 'WARNING' %}
+        <div class="sub">
+        {% if s.status != 'Approved' and (is_owner or current_user.can('reviewer')) %}
+          <label>Justification <input form="justify-form" name="j_{{ f.key }}" value="{{ f.justification or '' }}" placeholder="Why this value is correct"></label>
+        {% elif f.justification %}Justified by {{ f.justified_by }}: “{{ f.justification }}”{% endif %}
+        </div>
+      {% endif %}
+      {% if f.severity == 'ERROR' %}
+        <div class="sub">
+        {% if f.override_comment %}Overridden by {{ f.overridden_by }}: “{{ f.override_comment }}”{% endif %}
+        {% if can_review and s.status != 'Approved' and f.code not in ['QC-01', 'QC-32'] %}
+          <form method="post" action="{{ url_for('samples.override', pk=s.id) }}" class="inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="key" value="{{ f.key }}">
+            <input name="comment" value="{{ f.override_comment or '' }}" placeholder="Reviewer: reason to accept this value">
+            <button class="small">Save override</button>
+          </form>
+        {% endif %}
+        </div>
+      {% endif %}
+    </li>
+  {% endfor %}
+  </ul>
+  {% if findings|selectattr('severity', 'equalto', 'WARNING')|list and s.status != 'Approved' and (is_owner or current_user.can('reviewer')) %}
+    <button form="justify-form">Save justifications</button>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Workflow</h2>
+  {% if s.status in ['Draft', 'Rejected'] %}
+    {% if problems %}<p>Before submitting:</p><ul class="problems">{% for p in problems %}<li>{{ p }}</li>{% endfor %}</ul>{% endif %}
+    {% if can_edit %}
+    <form method="post" action="{{ url_for('samples.submit', pk=s.id) }}" class="inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="primary" {% if problems %}disabled{% endif %}>Submit for review</button>
+    </form>{% endif %}
+  {% elif s.status == 'Submitted' %}
+    {% if can_review %}
+      {% if problems %}<ul class="problems">{% for p in problems %}<li>{{ p }}</li>{% endfor %}</ul>{% endif %}
+      <form method="post" action="{{ url_for('samples.approve', pk=s.id) }}" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input name="comment" placeholder="Comment (optional)"> <button class="primary">Approve</button>
+      </form>
+      <form method="post" action="{{ url_for('samples.reject', pk=s.id) }}" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input name="comment" placeholder="Reason for rejection" required> <button>Reject</button>
+      </form>
+    {% elif is_owner %}<p class="muted">Waiting for a reviewer. You cannot approve your own sample.</p>
+    {% else %}<p class="muted">Waiting for a reviewer.</p>{% endif %}
+  {% elif s.status == 'Approved' %}
+    <p>Approved and locked.
+      {% if s.sample_type in ['Natural', 'Standard'] and current_user.can('reviewer') %}
+      <a href="{{ url_for('baselines.edit', symbol=s.element, add=s.id) }}">Include in the lab baseline…</a>{% endif %}</p>
+    <form method="post" action="{{ url_for('samples.revise', pk=s.id) }}" class="inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input name="reason" placeholder="Reason for a new version" required> <button>Create new version</button>
+    </form>
+  {% endif %}
+</section>
+{% endblock %}

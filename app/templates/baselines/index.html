@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Lab baselines{% endblock %}
+{% block content %}
+<h1>Lab baselines</h1>
+<p class="hint">A baseline is the mean and SD of the lab's own approved natural runs. The fine check (z-score) starts once a baseline has at least {{ min_runs }} runs.</p>
+<table class="data">
+  <tr><th>Element</th><th>Current version</th><th>Runs</th><th>Fine check</th><th></th></tr>
+  {% for r in rows %}
+  <tr><td>{{ r.name }} ({{ r.symbol }})</td><td>{{ ('v' ~ r.baseline.version ~ ', ' ~ (r.baseline.created_at|fdate)) if r.baseline else '–' }}</td>
+    <td>{{ r.n }}</td><td>{% if r.active %}<span class="sev OK">active</span>{% else %}<span class="sev WARNING">not active</span>{% endif %}</td>
+    <td><a href="{{ url_for('baselines.edit', symbol=r.symbol) }}">Open</a></td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

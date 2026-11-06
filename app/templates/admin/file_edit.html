@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<h1>{{ title }}: {{ name or 'new file' }}</h1>
+<form method="post" enctype="multipart/form-data" class="card">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="name" value="{{ name }}">
+  <textarea name="text" rows="30" class="code" spellcheck="false">{{ text }}</textarea>
+  <label>…or upload a YAML file instead <input type="file" name="upload" accept=".yaml,.yml"></label>
+  <div class="actions"><button class="primary">Check and save</button> <a href="{{ url_for('admin.files', kind=kind) }}">Cancel</a></div>
+</form>
+{% endblock %}

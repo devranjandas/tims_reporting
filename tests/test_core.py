@@ -397,6 +397,19 @@ def test_report_json_checksum():  # AT-19
     assert report_json.file_stem("TIMS/ACD/2026/0007", 1) == "TIMS_ACD_2026_0007-R1"
 
 
+def test_report_json_signature():
+    key = b"k" * 32
+    data = report_json.seal({"schema_version": 1, "report_id": "X", "revision": 0, "samples": [],
+                             "content": "ratios", "layout": "format_a"}, key)
+    text = report_json.dumps(data)
+    assert report_json.loads_verified(text, key)
+    forged = report_json.seal({**data, "report_id": "FORGED"})  # valid checksum, no valid signature
+    with pytest.raises(report_json.ReportJSONError, match="signature"):
+        report_json.loads_verified(report_json.dumps(forged), key)
+    with pytest.raises(report_json.ReportJSONError, match="signature"):
+        report_json.loads_verified(text, b"other key")
+
+
 def test_snapshot_diff():
     a = {"sample_id": "S", "ratios": [{"label": "170/173", "value": 0.1, "U": 0.001}], "atom_percent": []}
     b = {"sample_id": "S", "ratios": [{"label": "170/173", "value": 0.2, "U": 0.001}], "atom_percent": []}

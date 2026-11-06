@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+<div class="heading-row"><h1>Reports</h1>{% if current_user.can('analyst') %}<div><a class="button" href="{{ url_for('reports.new') }}">New report</a> <a class="button" href="{{ url_for('reports.headers') }}">Saved headers</a></div>{% endif %}</div>
+<input class="table-filter" data-table="report-table" placeholder="Filter by report ID, sample or creator">
+<table class="data" id="report-table">
+  <tr><th>Report ID</th><th>Generated</th><th>By</th><th>Table</th><th>Samples</th><th></th></tr>
+  {% for r in reports %}
+  <tr class="{{ 'highlight' if request.args.get('new') == r.id|string }}">
+    <td><b>{{ display_id(r.report_id, r.revision) }}</b> {% if r.draft %}<span class="badge st-draft">DRAFT</span>{% endif %}{% if r.revision_reason %}<div class="hint">Revision: {{ r.revision_reason }}</div>{% endif %}</td>
+    <td>{{ r.created_at|fdate }}</td><td>{{ r.created_by.full_name }}</td><td>{{ 'Atom %' if r.content == 'atom_percent' else 'Ratios' }}</td><td>{{ r.sample_list }}</td>
+    <td class="links"><a href="{{ url_for('reports.pdf', pk=r.id) }}">PDF</a> <a href="{{ url_for('reports.json_file', pk=r.id) }}">JSON</a>
+      <a href="{{ url_for('reports.recreate', pk=r.id) }}">Recreate</a>
+      {% if current_user.can('analyst') %}<a href="{{ url_for('reports.new', revise_of=r.id) }}">Revise</a>{% endif %}</td>
+  </tr>
+  {% else %}<tr><td colspan="6" class="muted">No reports yet.</td></tr>{% endfor %}
+</table>
+<section class="card">
+  <h2>Recreate a PDF from a report JSON file</h2>
+  <form method="post" action="{{ url_for('reports.upload') }}" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="file" name="report_json" accept=".json,application/json" required> <button>Check file</button>
+  </form>
+</section>
+{% endblock %}

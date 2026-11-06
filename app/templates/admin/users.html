@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Users{% endblock %}
+{% block content %}
+<div class="heading-row"><h1>Users</h1><a class="button" href="{{ url_for('admin.user_edit') }}">New user</a></div>
+<table class="data"><tr><th>Username</th><th>Name</th><th>Designation</th><th>Role</th><th>Status</th><th></th></tr>
+{% for u in users %}<tr class="{{ '' if u.active else 'muted' }}"><td>{{ u.username }}</td><td>{{ u.full_name }}</td><td>{{ u.designation }}</td><td>{{ role_names[u.role] }}</td>
+  <td>{% if not u.active %}disabled{% elif u.locked_until and u.locked_until > now() %}locked{% elif u.must_change_password %}must change password{% else %}active{% endif %}</td>
+  <td><a href="{{ url_for('admin.user_edit', pk=u.id) }}">Edit</a></td></tr>{% endfor %}
+</table>
+<p class="hint">Accounts are disabled, never deleted, so names stay in the audit trail.</p>
+{% endblock %}

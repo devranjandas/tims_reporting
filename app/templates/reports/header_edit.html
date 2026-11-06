@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Edit header{% endblock %}
+{% block content %}
+<h1>Edit saved header</h1>
+<form method="post" enctype="multipart/form-data" class="card narrow">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Name <input name="name" value="{{ h.name }}" required></label>
+  <label>Division code (for the Report ID) <input name="division_code" value="{{ h.division_code }}" required pattern="[A-Za-z]{2,6}"></label>
+  <label>Organisation <input name="organisation" value="{{ h.organisation }}" required></label>
+  <label>Division <input name="division" value="{{ h.division }}" required></label>
+  <label>Section / Laboratory <input name="section" value="{{ h.section }}"></label>
+  <label>Address <input name="address" value="{{ h.address }}"></label>
+  <label>Document / form number <input name="form_number" value="{{ h.form_number }}"></label>
+  {% if h.logo %}<p><img class="thumb" src="{{ url_for('reports.header_logo', pk=h.id) }}" alt="logo"> <label class="inline"><input type="checkbox" name="remove_logo" value="1"> Remove logo</label></p>{% endif %}
+  <label>New logo (PNG/JPEG, max 1 MB) <input type="file" name="logo" accept="image/png,image/jpeg"></label>
+  <div class="actions"><button class="primary">Save</button> <button name="action" value="delete" class="danger" onclick="return confirm('Delete this saved header?')">Delete</button>
+    <a href="{{ url_for('reports.headers') }}">Cancel</a></div>
+</form>
+{% endblock %}

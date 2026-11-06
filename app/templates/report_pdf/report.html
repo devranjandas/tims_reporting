@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ d.report_id }}</title>
+{%- set rid = d.report_id ~ ('-R' ~ d.revision if d.revision else '') %}
+{%- set generated = d.created_at|fdate %}
+<style>
+  @page {
+    size: A4 portrait;
+    margin: 44mm 18mm 20mm 18mm;
+    @top-left { content: element(pageHeader); width: 100%; vertical-align: bottom; }
+    @bottom-left {
+      content: "{{ rid }}{% if d.revision %} · Revision {{ d.revision }}{% endif %} · Generated {{ generated }} · TIMS-Report {{ d.software_version }}";
+      font: 7.5pt "DejaVu Sans", sans-serif; color: #555;
+    }
+    @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 7.5pt "DejaVu Sans", sans-serif; color: #555; }
+  }
+  body { font: 9.5pt/1.35 "DejaVu Sans", Arial, sans-serif; color: #111; }
+  .page-header { position: running(pageHeader); width: 174mm; border-bottom: 1.2pt solid #111; padding-bottom: 2mm; }
+  .page-header table { width: 100%; border-collapse: collapse; }
+  .page-header td { vertical-align: middle; padding: 0; }
+  .page-header .logo { width: 24mm; }
+  .page-header .logo img { max-width: 22mm; max-height: 22mm; }
+  .org { font-size: 13pt; font-weight: bold; }
+  .div { font-size: 11pt; }
+  .sec, .addr { font-size: 8.5pt; color: #333; }
+  .formno { font-size: 7.5pt; color: #555; text-align: right; vertical-align: top !important; }
+  h1 { font-size: 12.5pt; text-align: center; margin: 0 0 3mm; letter-spacing: .3pt; }
+  .idline { display: flex; justify-content: space-between; border-bottom: .6pt solid #999; padding-bottom: 1.5mm; margin-bottom: 4mm; font-size: 9pt; }
+  .draft-tag { color: #b00; font-weight: bold; }
+  .sample { page-break-inside: avoid; margin-bottom: 5mm; }
+  table.meta { width: 100%; border-collapse: collapse; margin-bottom: 2mm; font-size: 8.8pt; table-layout: fixed; }
+  table.meta td { padding: .6mm 1.5mm .6mm 0; }
+  table.meta td.k { color: #444; }
+  table.meta col.k { width: 22mm; } table.meta col.v { width: 78mm; }
+  table.res { border-collapse: collapse; margin: 1mm 0 2mm; }
+  table.res th, table.res td { border: .5pt solid #777; padding: .7mm 3mm; }
+  table.res th { background: #eee; font-weight: bold; text-align: center; }
+  table.res td.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.res tr.total td { font-weight: bold; }
+  table.wide { width: 100%; }
+  .notes { font-size: 8.2pt; margin: 3mm 0 6mm; padding-left: 4mm; }
+  .notes li { margin-bottom: .6mm; }
+  .closing { page-break-inside: avoid; }
+  .sigs { display: flex; justify-content: space-between; margin: 10mm 0 6mm; }
+  .sig { width: 45%; }
+  .sig .lbl { font-weight: bold; margin-bottom: 2mm; }
+  .remarks { margin-bottom: 6mm; }
+  .remarks .lbl { font-weight: bold; }
+  .remarks .txt { white-space: pre-wrap; }
+  .statement { font-style: italic; text-align: center; border-top: .6pt solid #999; padding-top: 2mm; font-size: 8.8pt; }
+  .watermark { position: fixed; top: 100mm; left: -18mm; width: 210mm; text-align: center; transform: rotate(-35deg);
+               font-size: 40pt; font-weight: bold; color: rgba(180, 0, 0, .13); white-space: nowrap; }
+  .unapproved { color: #b00; font-weight: bold; }
+</style>
+</head>
+<body>
+{% if preview %}<div class="watermark">PREVIEW</div>{% elif d.draft %}<div class="watermark">DRAFT – NOT APPROVED</div>{% endif %}
+{% if preview and d.draft %}<div class="watermark" style="top: 150mm">DRAFT</div>{% endif %}
+
+<div class="page-header">
+  <table><tr>
+    {% if logo_uri %}<td class="logo"><img src="{{ logo_uri }}" alt=""></td>{% endif %}
+    <td>
+      <div class="org">{{ d.header.organisation }}</div>
+      <div class="div">{{ d.header.division }}</div>
+      {% if d.header.section %}<div class="sec">{{ d.header.section }}</div>{% endif %}
+      {% if d.header.address %}<div class="addr">{{ d.header.address }}</div>{% endif %}
+    </td>
+    {% if d.header.form_number %}<td class="formno">{{ d.header.form_number }}</td>{% endif %}
+  </tr></table>
+</div>
+
+<h1>ISOTOPIC COMPOSITION REPORT (TIMS)</h1>
+<div class="idline">
+  <span>Report ID: <b>{{ rid }}</b>{% if d.draft and not preview %} <span class="draft-tag">DRAFT – NOT APPROVED</span>{% endif %}</span>
+  <span>Date of issue: {{ (d.created_at[:10])|fdate }}</span>
+</div>
+{% if d.supersedes %}<p style="font-size:8.5pt">This revision replaces {{ d.supersedes }}. Reason: {{ d.revision_reason }}</p>{% endif %}
+
+{% macro iso(m, sym) %}<sup>{{ m }}</sup>{{ sym }}{% endmacro %}
+{% macro status_note(s) %}{% if s.status != 'Approved' %} <span class="unapproved">({{ s.status }}, not approved)</span>{% endif %}{% endmacro %}
+
+{% if d.layout == 'format_a' %}
+  {% for s in d.samples %}
+  <div class="sample">
+    <table class="meta">
+      <colgroup><col class="k"><col class="v"><col class="k"><col></colgroup>
+      <tr><td class="k">Sample ID</td><td><b>{{ s.sample_id }}</b>{{ status_note(s) }}</td><td class="k">Element</td><td>{{ s.element_name }} ({{ s.element }})</td></tr>
+      <tr><td class="k">Sample type</td><td>{{ s.sample_type }}{% if s.enriched_isotope %} ({{ iso(s.enriched_isotope, s.element) }} enriched){% endif %}</td><td class="k">Analysed</td><td>{{ s.analysis_date|fdate }}</td></tr>
+      <tr><td class="k">Instrument</td><td>{{ s.instrument or '–' }}</td><td class="k">Analyst</td><td>{{ s.analyst or '–' }}</td></tr>
+      {% if s.batch_ref %}<tr><td class="k">Batch</td><td colspan="3">{{ s.batch_ref }}</td></tr>{% endif %}
+    </table>
+    {% if d.content == 'ratios' %}
+    <table class="res">
+      <tr><th>Ratio</th><th>Value</th><th>U ({{ '%g'|format(s.k) }} × SD)</th><th>RSD (ppm)</th></tr>
+      {% for r in s.ratios %}{% set p = fmt_pair(r.value, r.U) %}{% set nd = r.label.split('/') %}
+      <tr><td>{{ iso(nd[0], s.element) }}/{{ iso(nd[1], s.element) }}</td><td class="n">{{ p[0] }}</td><td class="n">{{ p[1] }}</td><td class="n">{{ '%.0f'|format(r.rsd_ppm) }}</td></tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <table class="res">
+      <tr><th>Isotope</th><th>Atom %</th><th>U ({{ '%g'|format(s.k) }} × SD)</th></tr>
+      {% for a in s.atom_percent %}{% set p = fmt_pair(a.value, a.U) %}
+      <tr><td>{{ iso(a.isotope, s.element) }}{% if a.assumed %} *{% endif %}</td><td class="n">{{ p[0] }}</td><td class="n">{{ p[1] }}</td></tr>
+      {% endfor %}
+      <tr class="total"><td>Total</td><td class="n">{{ '%.3f'|format(s.atom_percent|sum(attribute='value')) }}</td><td></td></tr>
+    </table>
+    {% endif %}
+  </div>
+  {% endfor %}
+{% else %}
+  {% for t in tables_b %}{% set sym = t.samples[0].element %}
+  <table class="res wide">
+    <tr><th>{{ 'Ratio' if d.content == 'ratios' else 'Isotope' }}</th>{% for s in t.samples %}<th>{{ s.sample_id }}{{ status_note(s) }}<br><span style="font-weight:normal">{{ 'Value ± U' if d.content == 'ratios' else 'Atom % ± U' }}</span></th>{% endfor %}</tr>
+    {% for row in t.rows %}
+    <tr>
+      <td>{% if d.content == 'ratios' %}{% set nd = row.key.split('/') %}{{ iso(nd[0], sym) }}/{{ iso(nd[1], sym) }}{% else %}{{ iso(row.key, sym) }}{% if row.assumed %} *{% endif %}{% endif %}</td>
+      {% for c in row.cells %}<td class="n">{% if c %}{% set p = fmt_pair(c.value, c.U) %}{{ p[0] }} ± {{ p[1] }}{% else %}–{% endif %}</td>{% endfor %}
+    </tr>
+    {% endfor %}
+    <tr><td>Sample type</td>{% for s in t.samples %}<td class="n">{{ s.sample_type }}</td>{% endfor %}</tr>
+    <tr><td>Analysed</td>{% for s in t.samples %}<td class="n">{{ s.analysis_date|fdate }}</td>{% endfor %}</tr>
+    <tr><td>Instrument</td>{% for s in t.samples %}<td class="n">{{ s.instrument or '–' }}</td>{% endfor %}</tr>
+  </table>
+  {% endfor %}
+{% endif %}
+
+<ul class="notes">{% for n in notes %}<li>{{ n }}</li>{% endfor %}</ul>
+
+<div class="closing">
+<div class="sigs">
+  {% for sig in d.signatories %}
+  <div class="sig"><div class="lbl">{{ sig.label }}</div><div>{{ sig.name }}</div><div>{{ sig.designation }}</div></div>
+  {% endfor %}
+</div>
+
+<div class="remarks"><span class="lbl">Remarks:</span> <span class="txt">{{ d.remarks or 'Nil' }}</span></div>
+
+<p class="statement">{{ d.footer_statement }}</p>
+</div>
+</body>
+</html>

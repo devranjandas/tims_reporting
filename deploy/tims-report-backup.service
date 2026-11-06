@@ -1,0 +1,10 @@
+[Unit]
+Description=TIMS-Report backup (database and report files)
+
+[Service]
+Type=oneshot
+User=tims
+Group=tims
+WorkingDirectory=/opt/tims-report
+EnvironmentFile=/etc/tims-report.env
+ExecStart=/opt/tims-report/.venv/bin/flask --app wsgi backup

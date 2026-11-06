@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Samples{% endblock %}
+{% block content %}
+<div class="heading-row">
+  <h1>Samples</h1>
+  <div><a class="button" href="{{ url_for('samples.new') }}">New sample</a>
+  <a class="button" href="{{ url_for('samples.export_csv', **args) }}">Export CSV</a></div>
+</div>
+<form class="filters" method="get">
+  <input name="q" value="{{ args.get('q', '') }}" placeholder="Sample ID, batch or remark">
+  <select name="element"><option value="">All elements</option>{% for e in elements %}<option {% if args.get('element') == e %}selected{% endif %}>{{ e }}</option>{% endfor %}</select>
+  <select name="type"><option value="">All types</option>{% for t in sample_types %}<option {% if args.get('type') == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select>
+  <select name="status"><option value="">All statuses</option>{% for t in ['Draft','Submitted','Approved','Rejected'] %}<option {% if args.get('status') == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select>
+  <input name="analyst" value="{{ args.get('analyst', '') }}" placeholder="Analyst">
+  <label class="inline">From <input type="date" name="from" value="{{ args.get('from', '') }}"></label>
+  <label class="inline">To <input type="date" name="to" value="{{ args.get('to', '') }}"></label>
+  <button>Search</button> <a href="{{ url_for('samples.index') }}">Clear</a>
+</form>
+<table class="data">
+  <tr><th>Sample ID</th><th>Element</th><th>Type</th><th>Analysed</th><th>Instrument</th><th>Analyst</th><th>Status</th><th>Ver.</th><th>Checks</th></tr>
+  {% for s in samples %}
+  {% set e = s.findings|selectattr('severity', 'equalto', 'ERROR')|list|length %}
+  {% set w = s.findings|selectattr('severity', 'equalto', 'WARNING')|list|length %}
+  <tr>
+    <td><a href="{{ url_for('samples.view', pk=s.id) }}">{{ s.sample_id }}</a></td>
+    <td>{{ s.element }}</td><td>{{ s.sample_type }}</td><td>{{ s.analysis_date|fdate }}</td><td>{{ s.instrument }}</td>
+    <td>{{ s.analyst_name }}</td><td><span class="badge st-{{ s.status|lower }}">{{ s.status }}</span></td><td>{{ s.version }}</td>
+    <td>{% if e %}<span class="sev ERROR">{{ e }} error{{ 's' if e > 1 }}</span>{% endif %} {% if w %}<span class="sev WARNING">{{ w }} warning{{ 's' if w > 1 }}</span>{% endif %}{% if not e and not w %}<span class="sev OK">OK</span>{% endif %}</td>
+  </tr>
+  {% else %}<tr><td colspan="9" class="muted">No samples found.</td></tr>{% endfor %}
+</table>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}History of {{ s.sample_id }}{% endblock %}
+{% block content %}
+<h1>History of {{ s.sample_id }} <small>{{ s.element }}</small></h1>
+<p><a href="{{ url_for('samples.view', pk=s.id) }}">Back to the sample</a></p>
+<section class="card">
+  <h2>Approved versions</h2>
+  {% if versions %}
+  <table class="data"><tr><th>Version</th><th>Frozen</th><th>By</th><th>Ratios</th></tr>
+  {% for v in versions %}<tr><td>{{ v.version }}</td><td>{{ v.created_at|fdate }}</td><td>{{ user_name(v.created_by_id) }}</td>
+    <td>{% for r in (v.snapshot.results or {}).get('ratios', []) %}{{ r.label }} = {{ r.value|sig(7) }}{{ '; ' if not loop.last }}{% endfor %}</td></tr>{% endfor %}
+  </table>
+  {% else %}<p class="muted">No approved version yet.</p>{% endif %}
+</section>
+<section class="card">
+  <h2>Audit trail</h2>
+  <table class="data"><tr><th>When</th><th>User</th><th>Action</th><th>Details</th></tr>
+  {% for l in logs %}<tr><td>{{ l.ts|fdate }}</td><td>{{ l.username }}</td><td>{{ l.action }}</td><td><code class="details">{{ l.details|tojson if l.details else '' }}</code></td></tr>{% endfor %}
+  </table>
+</section>
+{% endblock %}

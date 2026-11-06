@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="heading-row"><h1>{{ title }}</h1><a class="button" href="{{ url_for('admin.file_edit', kind=kind) }}">Add new</a></div>
+<table class="data"><tr><th>File</th><th>Content</th><th>Status</th><th></th></tr>
+{% for f in items %}<tr><td><code>{{ f.name }}</code></td><td>{{ f.info }}</td>
+  <td>{% if f.name.startswith('_') %}<span class="muted">template, not loaded</span>{% elif f.ok %}<span class="sev OK">loaded</span>{% else %}<span class="sev ERROR">not loaded</span> {{ f.error }}{% endif %}</td>
+  <td>{% if not f.name.startswith('_') %}<a href="{{ url_for('admin.file_edit', kind=kind, name=f.name) }}">Edit</a>{% endif %}</td></tr>{% endfor %}
+</table>
+{% if kind == 'elements' %}<p class="hint">To add an element, press <b>Add new</b>: the template opens with every field explained. The file is checked before it is saved (abundances add to 100 %, reference isotope present, at least two isotopes, and so on). Earlier versions are kept in the history folder.</p>{% endif %}
+{% endblock %}

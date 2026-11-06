@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Revise report' if revise_of else 'New report' }}{% endblock %}
+{% block content %}
+<h1>{% if revise_of %}Revise report {{ display_id(revise_of.report_id, revise_of.revision) }}{% else %}New report{% endif %}</h1>
+{% for e in errors %}<div class="flash error">{{ e }}</div>{% endfor %}
+<form method="post" enctype="multipart/form-data" action="{{ url_for('reports.new') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if revise_of %}<input type="hidden" name="revise_of" value="{{ revise_of.id }}"><input type="hidden" name="use_previous_logo" value="{{ form.use_previous_logo }}">{% endif %}
+
+  <section class="card">
+    <h2>1. Samples</h2>
+    <p class="hint">Any sample in the database can be reported. A report with any sample that is not approved is marked DRAFT.</p>
+    <input class="table-filter" data-table="sample-table" placeholder="Filter by sample ID, element, type, status, date">
+    <div class="scroll">
+    <table class="data" id="sample-table">
+      <tr><th><input type="checkbox" class="select-all" data-table="sample-table" title="Select all shown"></th><th>Sample ID</th><th>Element</th><th>Type</th><th>Analysed</th><th>Status</th><th>Ver.</th></tr>
+      {% for s in samples %}
+      <tr><td><input type="checkbox" name="sample" value="{{ s.id }}" {% if s.id in form.selected %}checked{% endif %}></td>
+        <td>{{ s.sample_id }}</td><td>{{ s.element }}</td><td>{{ s.sample_type }}</td><td>{{ s.analysis_date|fdate }}</td>
+        <td><span class="badge st-{{ s.status|lower }}">{{ s.status }}</span></td><td>{{ s.version }}</td></tr>
+      {% else %}<tr><td colspan="7" class="muted">No samples in the database.</td></tr>{% endfor %}
+    </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>2. Divisional header</h2>
+    <label>Start from a saved header
+      <select name="saved_header_id" id="saved-header" data-headers='{{ saved_js|tojson_compact }}'>
+        <option value="">– type a new header –</option>
+        {% for h in saved %}<option value="{{ h.id }}" {% if form.saved_header_id == h.id|string %}selected{% endif %}>{{ h.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <div class="grid2">
+      <label>Division code (used in the Report ID) <input name="division_code" value="{{ form.header.division_code }}" required pattern="[A-Za-z]{2,6}" placeholder="e.g. ACD" {% if revise_of %}readonly title="The Report ID does not change in a revision"{% endif %}></label>
+      <label>Organisation <input name="organisation" value="{{ form.header.organisation }}" required></label>
+      <label>Division <input name="division" value="{{ form.header.division }}" required></label>
+      <label>Section / Laboratory <input name="section" value="{{ form.header.section }}"></label>
+      <label>Address <input name="address" value="{{ form.header.address }}"></label>
+      <label>Document / form number <input name="form_number" value="{{ form.header.form_number }}"></label>
+      <label>Logo (PNG/JPEG, max 1 MB) <input type="file" name="logo" accept="image/png,image/jpeg">
+        <span class="hint" id="logo-note">{% if form.use_previous_logo %}The logo of the earlier revision is used unless you choose another.{% endif %}</span></label>
+      <label class="inline"><input type="checkbox" name="no_logo" value="1"> No logo</label>
+    </div>
+    <label>Save this header as (optional) <input name="save_header_name" value="{{ form.get('save_header_name', '') }}" placeholder="e.g. ACD – Mass Spectrometry Section"></label>
+  </section>
+
+  <section class="card">
+    <h2>3. Table</h2>
+    <div class="grid2">
+      <fieldset><legend>Show</legend>{% for k, v in contents.items() %}<label class="inline"><input type="radio" name="content" value="{{ k }}" {% if form.content == k %}checked{% endif %}> {{ v }}</label>{% endfor %}</fieldset>
+      <fieldset><legend>Layout</legend>{% for k, v in layouts.items() %}<label class="inline"><input type="radio" name="layout" value="{{ k }}" {% if form.layout == k %}checked{% endif %}> {{ v }}</label>{% endfor %}</fieldset>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>4. Signatures and remarks</h2>
+    <div class="grid2">
+      {% for sig in form.signatories %}{% set i = loop.index0 %}
+      <fieldset><legend>{{ sig.label }}</legend>
+        <label>Pick a user <select class="pick-user" data-target="sig{{ i }}"><option value="">–</option>{% for u in users %}<option data-name="{{ u.full_name }}" data-designation="{{ u.designation }}">{{ u.full_name }}</option>{% endfor %}</select></label>
+        <label>Name <input name="sig{{ i }}_name" id="sig{{ i }}_name" value="{{ sig.name }}" required></label>
+        <label>Designation <input name="sig{{ i }}_designation" id="sig{{ i }}_designation" value="{{ sig.designation }}"></label>
+      </fieldset>{% endfor %}
+    </div>
+    <label>Remarks <textarea name="remarks" rows="3">{{ form.remarks }}</textarea></label>
+    {% if revise_of %}<label>Reason for this revision <input name="revision_reason" value="{{ form.revision_reason }}" required></label>{% endif %}
+  </section>
+
+  <div class="actions">
+    <button name="action" value="preview" formtarget="_blank">Preview PDF</button>
+    <button class="primary" name="action" value="generate">Generate report</button>
+  </div>
+</form>
+{% endblock %}

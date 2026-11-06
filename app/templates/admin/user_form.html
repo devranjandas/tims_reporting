@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if user else 'New' }} user{% endblock %}
+{% block content %}
+<h1>{% if user %}Edit {{ user.username }}{% else %}New user{% endif %}</h1>
+<form method="post" class="card narrow">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if not user %}<label>Username <input name="username" value="{{ form.get('username', '') }}" required></label>{% endif %}
+  <label>Full name <input name="full_name" value="{{ form.get('full_name', user.full_name if user else '') }}" required></label>
+  <label>Designation <input name="designation" value="{{ form.get('designation', user.designation if user else '') }}"></label>
+  <label>Role <select name="role">{% for r in roles %}<option value="{{ r }}" {% if (form.get('role') or (user.role if user else 'analyst')) == r %}selected{% endif %}>{{ role_names[r] }}</option>{% endfor %}</select></label>
+  <p class="hint">Viewer: reports only. Analyst: enter data and create reports. Reviewer: also approve, reject and override. Administrator: everything, plus settings.</p>
+  <div class="actions">
+    <button class="primary">Save</button>
+    {% if user %}
+      <button name="action" value="reset">Reset password</button>
+      {% if user.active %}{% if user.id != current_user.id %}<button name="action" value="disable" class="danger">Disable account</button>{% endif %}
+      {% else %}<button name="action" value="enable">Enable account</button>{% endif %}
+    {% endif %}
+    <a href="{{ url_for('admin.users') }}">Cancel</a>
+  </div>
+  {% if not user %}<p class="hint">A temporary password is shown after saving. The user must change it at first login.</p>{% endif %}
+</form>
+{% endblock %}

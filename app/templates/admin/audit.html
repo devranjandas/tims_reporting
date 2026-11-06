@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Audit trail{% endblock %}
+{% block content %}
+<h1>Audit trail</h1>
+<form class="filters" method="get">
+  <input name="user" value="{{ args.get('user', '') }}" placeholder="Username">
+  <input name="action" value="{{ args.get('action', '') }}" placeholder="Action contains">
+  <input name="object" value="{{ args.get('object', '') }}" placeholder="Object ID contains">
+  <button>Filter</button>
+</form>
+<table class="data"><tr><th>When</th><th>User</th><th>Action</th><th>Object</th><th>Details</th></tr>
+{% for l in rows %}<tr><td>{{ l.ts|fdate }}</td><td>{{ l.username }}</td><td>{{ l.action }}</td><td>{{ l.object_type }} {{ l.object_id }}</td><td><code class="details">{{ l.details|tojson if l.details else '' }}</code></td></tr>{% endfor %}
+</table>
+<p class="hint">Latest 500 entries shown.</p>
+{% endblock %}
