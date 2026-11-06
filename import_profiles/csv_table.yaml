@@ -1,0 +1,13 @@
+# One ratio per line: label, mean, RSD (ppm), comma separated.
+# An optional line with only "<Element> <Sample>" starts a new sample, e.g.
+#   Yb Nat
+#   170/173,0.185665,334.298435
+name: "CSV table (label, mean, RSD ppm)"
+layout: table
+delimiter: ","
+columns: {label: 0, mean: 1, rsd: 2}
+header_pattern: '^(?P<element>[A-Z][a-z]?)(?:\s+(?P<sample>.+?))?\s*$'
+label_pattern: '^(?:R\s*)?(?P<num>\d{1,3})\s*(?:[A-Z][a-z]?)?\s*/\s*(?P<den>\d{1,3})\s*(?:[A-Z][a-z]?)?$'
+rsd_unit: ppm
+decimal_separator: "."
+skip_pattern: '^(?i:ratio|label)\b'

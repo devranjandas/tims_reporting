@@ -1,0 +1,14 @@
+# Default TIMS summary block, e.g.
+#   Yb Nat
+#   170/173
+#   0.185665
+#   334.298435
+#   171/173
+#   ...
+name: "TIMS summary block (default)"
+layout: line_block
+header_pattern: '^(?P<element>[A-Z][a-z]?)(?:\s+(?P<sample>.+?))?\s*$'
+label_pattern: '^(?:R\s*)?(?P<num>\d{1,3})\s*(?:[A-Z][a-z]?)?\s*/\s*(?P<den>\d{1,3})\s*(?:[A-Z][a-z]?)?$'
+group: [label, mean, rsd]
+rsd_unit: ppm
+decimal_separator: "."

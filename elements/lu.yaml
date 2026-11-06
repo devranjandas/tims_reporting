@@ -1,0 +1,26 @@
+# Lutetium. Natural abundances: IUPAC/CIAAW 2013. Masses: AME2020.
+# Check values against the latest tables before production use.
+schema_version: 1
+element:
+  symbol: Lu
+  name: Lutetium
+  atomic_number: 71
+  definition_version: "2026-11-06.1"
+
+reference_isotope: 175
+measured_ratios: [176]            # 176/175, natural ~ 0.02668
+unmeasured_isotopes: assume_natural
+
+isotopes:
+  - {A: 175, mass: 174.940777, abundance: 97.401, u_abundance: 0.013}
+  - {A: 176, mass: 175.942691, abundance: 2.599,  u_abundance: 0.013}
+abundance_source: "IUPAC/CIAAW 2013"
+
+interferences:
+  - {mass: 176, species: ["176Yb", "176Hf"]}
+
+qc_tolerances:
+  natural_deviation_pct:  {warning: 5, error: 20}
+  baseline_z:             {warning: 3, error: 5}
+  enriched_deviation_pct: {warning: 2, error: 10}
+  rsd_ppm:                {min: 1, max: 5000}

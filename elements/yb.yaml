@@ -1,0 +1,33 @@
+# Ytterbium. Natural abundances: IUPAC/CIAAW 2013. Masses: AME2020.
+# Check values against the latest tables before production use.
+schema_version: 1
+element:
+  symbol: Yb
+  name: Ytterbium
+  atomic_number: 70
+  definition_version: "2026-11-06.1"
+
+reference_isotope: 173
+measured_ratios: [170, 171, 172, 174, 176]   # numerators normally measured
+unmeasured_isotopes: assume_natural           # 168Yb is not measured
+
+isotopes:            # A: mass number, mass (u), natural abundance (atom %), 1-sigma unc.
+  - {A: 168, mass: 167.933891, abundance: 0.123,  u_abundance: 0.003}
+  - {A: 170, mass: 169.934767, abundance: 2.982,  u_abundance: 0.039}
+  - {A: 171, mass: 170.936331, abundance: 14.09,  u_abundance: 0.14}
+  - {A: 172, mass: 171.936386, abundance: 21.68,  u_abundance: 0.13}
+  - {A: 173, mass: 172.938216, abundance: 16.103, u_abundance: 0.063}
+  - {A: 174, mass: 173.938867, abundance: 32.026, u_abundance: 0.080}
+  - {A: 176, mass: 175.942574, abundance: 12.996, u_abundance: 0.083}
+abundance_source: "IUPAC/CIAAW 2013"
+
+interferences:
+  - {mass: 168, species: ["168Er"]}
+  - {mass: 170, species: ["170Er"]}
+  - {mass: 176, species: ["176Lu", "176Hf"]}
+
+qc_tolerances:
+  natural_deviation_pct:  {warning: 5, error: 20}
+  baseline_z:             {warning: 3, error: 5}
+  enriched_deviation_pct: {warning: 2, error: 10}
+  rsd_ppm:                {min: 1, max: 5000}

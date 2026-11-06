@@ -1,0 +1,37 @@
+# TEMPLATE for a new element. Copy this file to <symbol>.yaml (e.g. nd.yaml),
+# fill in every field, and upload it in Admin > Elements (or place it in this folder
+# and restart). Files whose names start with "_" are ignored.
+#
+# Rules checked when the file is loaded:
+#   - natural abundances must add up to 100 % (within 0.01)
+#   - each mass number appears once
+#   - the reference isotope must be in the isotope list
+#   - the element must have at least two naturally occurring isotopes
+#   - measured_ratios lists the NUMERATOR mass numbers; the denominator is always
+#     the reference isotope
+#   - warning limits must be smaller than error limits
+schema_version: 1
+element:
+  symbol: Xx               # chemical symbol, e.g. Nd
+  name: Element-name       # e.g. Neodymium
+  atomic_number: 0
+  definition_version: "YYYY-MM-DD.1"   # change this every time you edit the file
+
+reference_isotope: 0       # denominator of all ratios
+measured_ratios: [0, 0]    # numerators normally measured
+unmeasured_isotopes: assume_natural   # assume_natural | exclude
+
+isotopes:                  # A, exact mass (u), natural abundance (atom %), 1-sigma uncertainty
+  - {A: 0, mass: 0.0, abundance: 0.0, u_abundance: 0.0}
+abundance_source: "IUPAC/CIAAW <year>"
+
+interferences:             # isobars of other elements at the same mass
+  - {mass: 0, species: ["0Xx"]}
+
+qc_tolerances:
+  natural_deviation_pct:  {warning: 5, error: 20}   # % deviation from IUPAC ratio
+  baseline_z:             {warning: 3, error: 5}    # z-score vs lab baseline
+  enriched_deviation_pct: {warning: 2, error: 10}   # % deviation from batch reference
+  rsd_ppm:                {min: 1, max: 5000}       # plausible RSD range
+  # per_ratio:                                      # optional overrides for one ratio
+  #   "176/173": {natural_deviation_pct: {warning: 6, error: 20}}

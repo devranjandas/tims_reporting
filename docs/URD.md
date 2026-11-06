@@ -4,9 +4,9 @@
 | Item | Value |
 |---|---|
 | Document ID | TIMS-URD-001 |
-| Version | 0.3 (Draft for review) |
+| Version | 0.4 (Baseline for release 1 build) |
 | Date | 2026-11-06 |
-| Status | Draft: updated with user answers to Q-13, Q-14, Q-15, Q-17, Q-19 |
+| Status | Agreed for build: updated with user answers to Q-16, Q-20, Q-21 |
 | Initial elements | Ytterbium (Yb), Lutetium (Lu); later the stable lanthanides |
 | Platform | Web application: Python Flask + SQLite, hosted on the internal (on-premises) cloud |
 
@@ -17,6 +17,7 @@
 | 0.1 | 2026-10-19 | First draft |
 | 0.2 | 2026-11-06 | Changed to a multi-user Flask/SQLite web app. Removed atomic-weight calculation (FR-CAL-10). Uncertainty fixed as U = 3 × SD. ¹⁶⁸Yb assumed natural. Enriched samples made fully supported. Lab baseline seeded with 10 samples. ISO 17025 items reduced. Lanthanide scope and interference table added. Configurable import formats. Reporting section fully specified (Section 9). Explanations added for uncertainty budget, ratio correlation and mass-bias correction (Appendix A). Open questions re-issued (Section 12). |
 | 0.3 | 2026-11-06 | Signature blocks show names and designations only. Unapproved samples allowed in reports, marked DRAFT. Local app accounts only (no directory login). Deployment on plain virtual machines (no containers). Report header (organisation, division, section, address) entered by the user creating the report, with reusable saved headers. Header text stored inside the report JSON. |
+| 0.4 | 2026-11-06 | About 10 users, 3 at once. No mass-bias correction and no uncertainty budget in release 1. No enriched-material certificates: enriched samples are checked against an earlier approved measurement of the same batch. |
 
 ---
 
@@ -125,7 +126,7 @@ Several users work at the same time from their own browsers.
 | ENV-06 | Uses only well-maintained open-source libraries, for example: Flask, Flask-Login, Flask-WTF (forms and CSRF protection), SQLAlchemy, Jinja2, NumPy, PyYAML, and **WeasyPrint** (HTML-to-PDF). | Must |
 | ENV-07 | Front-end assets (CSS/JS) are bundled with the app and do not load from public CDNs. | Must |
 | ENV-08 | File storage for report JSON files and generated PDFs sits in a configured folder on the server, included in backups. | Must |
-| ENV-09 | Expected load: up to about 20 named users and 5 working at the same time (to be confirmed, Q-16). SQLite is suitable at this scale. | Should |
+| ENV-09 | Expected load: about **10 named users, 3 working at the same time** (user answer Q-16). SQLite is suitable at this scale. | Should |
 
 ---
 
@@ -257,7 +258,7 @@ Priority uses MoSCoW: **Must / Should / Could / Won't (this release)**.
 | FR-CAL-09 | A **Monte Carlo** uncertainty option (JCGM 101) is available as a cross-check of FR-CAL-08. | Could |
 | ~~FR-CAL-10~~ | ~~Atomic weight calculation.~~ **Removed at user request.** | – |
 | FR-CAL-11 | Optionally reports **mass fraction (weight %)** of each isotope as well as atom %. | Could |
-| FR-CAL-12 | Optional **mass-bias correction** with per-ratio **K-factors** from a standard measured in the same campaign (Appendix A.3). Off by default. When used, raw and corrected values are stored, and the report states the standard and K-factors used. | Should |
+| FR-CAL-12 | Optional **mass-bias correction** with per-ratio **K-factors** from a standard measured in the same campaign (Appendix A.3). **Not in release 1** (user answer Q-20). Reports state "No mass-bias correction applied". | Won't (release 1) |
 | FR-CAL-13 | **Optional uncertainty budget**: the Administrator may define extra uncertainty components per element and ratio (e.g. between-run reproducibility, K-factor uncertainty), expressed in ppm. These are combined with the repeatability SD as the root sum of squares before multiplying by 3 (Appendix A.1). Off by default, so U = 3 × SD as decided. | Could |
 | FR-CAL-14 | **Rounding**: U is rounded to 2 significant figures. The value is rounded to the same decimal place as U. All calculations use full precision; rounding happens only on display and in reports. | Must |
 | FR-CAL-15 | Calculations are deterministic and match the worked example in Section 5 to at least 6 significant figures. | Must |
@@ -305,7 +306,7 @@ Which reference the checks compare against depends on the sample type:
 | ID | Requirement | Priority |
 |---|---|---|
 | FR-QC-40 | For enriched samples, natural-abundance checks (FR-QC-10/11/16) are **not** applied as pass/fail. The deviation from natural is shown as INFO. | Must |
-| FR-QC-41 | The user selects or enters an **expected composition** for the enriched material: from the supplier certificate (atom % or ratios with uncertainty), or from an earlier approved measurement of the same batch. Deviation checks then run against it, with their own tolerances (default: \|δ\| > 2 % relative on the enriched isotope's ratio → WARNING, > 10 % → ERROR; configurable). | Must |
+| FR-QC-41 | The **expected composition** of an enriched material is taken from the **most recent approved measurement of the same element and batch reference** (no supplier certificates are available, user answer Q-21). The user can instead pick a specific earlier approved sample as the reference. Deviation checks then run against it, with their own tolerances (default: \|δ\| > 2 % relative on the enriched isotope's ratio → WARNING, > 10 % → ERROR; configurable). | Must |
 | FR-QC-42 | **Enrichment plausibility**: the isotope declared as enriched must have the highest abundance relative to natural, and the sample's composition must be "between" natural and the declared enrichment (it cannot be more depleted than natural in the enriched isotope). Catches a natural sample wrongly marked enriched, or the wrong enriched isotope chosen. | Should |
 | FR-QC-43 | Basic checks (6.5.1), entry-mistake checks against the expected composition (6.5.4) and self-checks (FR-QC-32) still apply. | Must |
 | FR-QC-44 | If no expected composition is given, only basic checks and the plausibility check run, and the screen says so clearly. | Must |
@@ -760,15 +761,15 @@ decimal_separator: "."
 | Q-15 | Accounts made in the app | FR-DATA-05, 05a–05c |
 | Q-17 | Plain virtual machines | ENV-05, ENV-05a, Section 14 |
 | Q-19 | User enters organisation, division, section etc. in the report | FR-REP-03, 03a, 03b, Section 9.4 |
+| Q-16 | About 10 users, 3 at once | ENV-09 |
+| Q-20 | No mass-bias correction to begin with | FR-CAL-12 moved out of release 1; FR-CAL-13 stays off |
+| Q-21 | No enriched-material certificates | FR-QC-41: reference is an earlier approved measurement of the same batch |
 
 ### 12.3 Still open
 
 | ID | Question | Why it matters |
 |---|---|---|
-| Q-16 | About how many users in total, and how many at the same time? | Confirms SQLite is enough (ENV-09) |
 | Q-18 | Please send **sample export files** in each format the instrument(s) produce. | Import profiles (FR-IN-10) |
-| Q-20 | After reading Appendix A: do you want the optional uncertainty budget (FR-CAL-13) and K-factor mass-bias correction (FR-CAL-12) in the first release? Which reference material would be used for K-factors? | Scope of release 1 |
-| Q-21 | For enriched samples, are supplier certificates available as atom % or as ratios? | FR-QC-41 entry form |
 
 ---
 
@@ -893,4 +894,4 @@ This is common for natural samples in geochemistry. It **cannot be used for enri
 
 **Method 3: total evaporation.** The whole sample is evaporated and all ions are summed, which largely cancels the time-dependent part of the bias. If your instrument uses this method, a K-factor correction may still remove the remaining bias.
 
-**Recommendation:** release 1 stores and reports the **uncorrected** ratios, as now. It includes the K-factor correction as an option the Administrator can switch on per element (FR-CAL-12), and the report states whether a correction was applied. The lab must choose the standard to use (Q-20). The IUPAC natural values themselves have about 0.5–1 % uncertainty for some Yb isotopes, so a certified isotopic reference material gives a better K-factor than "natural Yb = IUPAC".
+**Recommendation:** release 1 stores and reports the **uncorrected** ratios, as now. The K-factor correction (FR-CAL-12) is left for a later release (user answer Q-20). The IUPAC natural values themselves have about 0.5–1 % uncertainty for some Yb isotopes, so a certified isotopic reference material gives a better K-factor than "natural Yb = IUPAC".
