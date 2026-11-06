@@ -4,9 +4,9 @@
 | Item | Value |
 |---|---|
 | Document ID | TIMS-URD-001 |
-| Version | 0.2 (Draft for review) |
+| Version | 0.3 (Draft for review) |
 | Date | 2026-11-06 |
-| Status | Draft: updated with user comments on v0.1 |
+| Status | Draft: updated with user answers to Q-13, Q-14, Q-15, Q-17, Q-19 |
 | Initial elements | Ytterbium (Yb), Lutetium (Lu); later the stable lanthanides |
 | Platform | Web application: Python Flask + SQLite, hosted on the internal (on-premises) cloud |
 
@@ -16,6 +16,7 @@
 |---|---|---|
 | 0.1 | 2026-10-19 | First draft |
 | 0.2 | 2026-11-06 | Changed to a multi-user Flask/SQLite web app. Removed atomic-weight calculation (FR-CAL-10). Uncertainty fixed as U = 3 × SD. ¹⁶⁸Yb assumed natural. Enriched samples made fully supported. Lab baseline seeded with 10 samples. ISO 17025 items reduced. Lanthanide scope and interference table added. Configurable import formats. Reporting section fully specified (Section 9). Explanations added for uncertainty budget, ratio correlation and mass-bias correction (Appendix A). Open questions re-issued (Section 12). |
+| 0.3 | 2026-11-06 | Signature blocks show names and designations only. Unapproved samples allowed in reports, marked DRAFT. Local app accounts only (no directory login). Deployment on plain virtual machines (no containers). Report header (organisation, division, section, address) entered by the user creating the report, with reusable saved headers. Header text stored inside the report JSON. |
 
 ---
 
@@ -104,7 +105,7 @@ The export format **may differ** (Q-12). Import must therefore be configurable (
 |---|---|---|
 | **Analyst** | Runs the TIMS and enters the data | Enter/import data, review warnings, fix entry errors, submit for review, create reports |
 | **Reviewer** | Senior scientist | Review data and flags, approve or reject results, create reports |
-| **Administrator** | Software owner | Manage users, element library, reference compositions, lab baselines, tolerances, import formats, report headers and templates |
+| **Administrator** | Software owner | Manage user accounts, element library, reference compositions, lab baselines, tolerances, import formats and report templates |
 | **Viewer** (optional) | Manager or customer | View and download existing reports only |
 
 Several users work at the same time from their own browsers.
@@ -119,7 +120,8 @@ Several users work at the same time from their own browsers.
 | ENV-02 | Data stored in **SQLite**. The database runs in WAL mode so several users can read while one writes. | Must |
 | ENV-03 | Hosted on the organisation's **on-premises cloud**. Reached by users through a web browser on the internal network. No internet access is needed at run time. | Must |
 | ENV-04 | Works in current versions of Chrome, Edge and Firefox. No software is installed on user PCs. | Must |
-| ENV-05 | Runs behind a production WSGI server (e.g. Gunicorn or Waitress) and the organisation's reverse proxy / HTTPS. Delivered with a deployment guide, and a container image (Dockerfile) if the internal cloud uses containers (Q-17). | Must |
+| ENV-05 | Deployed on a **plain virtual machine** (no containers; user answer Q-17), preferably Linux. Runs under a production WSGI server (Gunicorn on Linux, or Waitress on Windows) as a system service that starts automatically, behind a reverse proxy (e.g. nginx) for HTTPS. Delivered with an install script, an example service file and reverse-proxy configuration, and a step-by-step deployment guide. | Must |
+| ENV-05a | The application, its Python virtual environment, the SQLite database and the report-file folder all live on the VM in documented folders, so the VM can be backed up and restored as a whole. Upgrades are installed by replacing the application folder and running a database upgrade command. | Must |
 | ENV-06 | Uses only well-maintained open-source libraries, for example: Flask, Flask-Login, Flask-WTF (forms and CSRF protection), SQLAlchemy, Jinja2, NumPy, PyYAML, and **WeasyPrint** (HTML-to-PDF). | Must |
 | ENV-07 | Front-end assets (CSS/JS) are bundled with the app and do not load from public CDNs. | Must |
 | ENV-08 | File storage for report JSON files and generated PDFs sits in a configured folder on the server, included in backups. | Must |
@@ -357,7 +359,10 @@ When a value is flagged against its reference (natural, baseline, or expected en
 | FR-DATA-02 | Workflow states: **Draft → Submitted → Approved / Rejected**. Approved records are locked. Any later change creates a new version and keeps the old one. | Must |
 | FR-DATA-03 | **Audit trail**: every create, change, override, approval, report generation and configuration change is recorded with user, date/time, old value, new value and reason. Ordinary users cannot edit it. | Must |
 | FR-DATA-04 | Search and filter the whole database by sample ID, element, sample type, date range, analyst, status. Used both for browsing and for selecting samples for reports. | Must |
-| FR-DATA-05 | **User login** with username and password (stored hashed), and role-based permissions (Section 3). Optional connection to the organisation's directory (LDAP/Active Directory) if available (Q-15). A Reviewer cannot approve their own data. | Must |
+| FR-DATA-05 | **User login with accounts made in the app** (user answer Q-15; no directory login). Username and password, stored hashed. Role-based permissions (Section 3). A Reviewer cannot approve their own data. | Must |
+| FR-DATA-05a | **Account management** by the Administrator: create users, assign roles, disable accounts (never delete, so the audit trail keeps the names), and reset passwords. Users must change a password set by the Administrator at first login. Users can change their own password. | Must |
+| FR-DATA-05b | **Password rules**: minimum length 10 characters (configurable). The account locks for 15 minutes after 5 failed logins in a row. The first Administrator account is created by a command during installation. | Must |
+| FR-DATA-05c | Each user record holds the full name and designation, used to pre-fill the signature blocks on reports (FR-REP-06). | Must |
 | FR-DATA-06 | Two users editing the same sample at the same time: the second save is refused with a message, so no data is silently overwritten. | Must |
 | FR-DATA-07 | Session timeout after a configurable idle period (default 30 minutes). | Should |
 | FR-DATA-08 | Scheduled backup of the SQLite database and the report-file folder (using SQLite's online backup), with the number of copies kept configurable. A restore procedure is documented. | Must |
@@ -416,13 +421,13 @@ Summary ──► justify WARNINGs / Reviewer overrides ERRORs ──► Submit 
 ### 9.1 Workflow
 
 1. The user opens **"New report"** and searches the **whole database** (FR-DATA-04). Any sample can be chosen, from any element, date or analyst. One or more samples can be selected.
-2. The user chooses:
-   - **Divisional header** (from the list set up by the Administrator),
+2. The user fills in or chooses:
+   - the **divisional header**: organisation, division, section, address, and optional logo and form number. These can be typed in, or loaded from a header the user saved earlier and edited (9.4),
    - **Table content**: **Isotope ratios ± U** *or* **Atom % ± U**,
    - **Layout**: Format A (one sample per table) or Format B (several samples side by side), see 9.3,
-   - names and designations for the **two signature blocks**,
+   - **names and designations** for the **two signature blocks**,
    - **Remarks** (free text).
-3. The user clicks **Preview**, which shows the report on screen with a "PREVIEW" watermark.
+3. The user clicks **Preview**, which shows the report on screen with a "PREVIEW" watermark. If any selected sample is not approved, the preview says so and the final report will be marked DRAFT.
 4. The user clicks **Generate**. The software:
    - gives the report a **unique Report ID**,
    - saves the **report JSON** file (9.5) and a record in the database,
@@ -434,14 +439,17 @@ Summary ──► justify WARNINGs / Reviewer overrides ERRORs ──► Submit 
 | ID | Requirement | Priority |
 |---|---|---|
 | FR-REP-01 | The user can select **any sample(s) from the complete database** for a report, using search and filters. | Must |
-| FR-REP-02 | Only **Approved** samples appear in a final report. If an unapproved sample is selected, the report is marked "DRAFT – NOT APPROVED" on every page (Q-13). | Must |
-| FR-REP-03 | **Divisional header** at the top of every page. The Administrator maintains one or more header profiles: organisation name, division name, section/laboratory name, address line, logo image, and an optional document/form number. The user picks one per report. | Must |
+| FR-REP-02 | **Unapproved samples may be included** (user answer Q-13). A report containing any sample that is not Approved is marked **"DRAFT – NOT APPROVED"** as a watermark on every page and next to the Report ID. The table marks each unapproved sample with its status. A draft report still gets a unique Report ID and JSON file. | Must |
+| FR-REP-02a | A draft report can later be re-issued as a final report, once all its samples are approved, as a new revision (FR-REP-13). | Should |
+| FR-REP-03 | **Divisional header** at the top of every page, **entered by the user creating the report** (user answer Q-19): organisation name, division name, section/laboratory name, address line, and optionally a logo image (upload) and a document/form number. All fields are free text. | Must |
+| FR-REP-03a | **Saved headers**: the user can save a header under a name and load it in later reports, then change any field before generating. Saved headers are visible to all users, and any user can add new ones. Only the creator or an Administrator can edit or delete a saved header. Changing a saved header never changes reports already generated. | Must |
+| FR-REP-03b | The text of the header used is stored **inside the report JSON** (not just a link to a saved header), so a recreated PDF always shows the original header. | Must |
 | FR-REP-04 | **Measurement table**, with the content **chosen by the user**: (a) isotope ratios with U, or (b) atom % with U. One choice per report. | Must |
 | FR-REP-05 | Below the table, fixed **notes** generated automatically: "U = 3 × SD (n = 30 measurements)"; reference isotope; isotopes assumed natural (e.g. "¹⁶⁸Yb assumed natural"); mass-bias correction applied or not; reference composition used for checks. | Must |
-| FR-REP-06 | **Two signature placeholders** after the table and notes, side by side: "Prepared by" and "Checked / Approved by", each with name, designation and date. The labels can be changed by the Administrator. | Must |
+| FR-REP-06 | **Two signature placeholders** after the table and notes, side by side: "Prepared by" and "Checked / Approved by". Each shows **only the name and designation** (user answer Q-14): no line to sign on and no date. "Prepared by" is pre-filled from the logged-in user. "Checked / Approved by" is chosen from the list of users (or typed in). The labels can be changed by the Administrator. | Must |
 | FR-REP-07 | **Remarks** area below the signatures, filled with the text entered by the report creator. Shown as "Remarks: Nil" if left empty. | Must |
 | FR-REP-08 | Last line of the report body: **"This report is digitally generated and does not need signatures."** The wording can be changed by the Administrator. | Must |
-| FR-REP-09 | **Unique Report ID** on every page. Proposed format: `TIMS/<DIV>/<YYYY>/<NNNN>`, for example `TIMS/ACD/2026/0007`. `<DIV>` comes from the header profile; `<NNNN>` is a running number reset each year. IDs are never reused, even if a report is cancelled. | Must |
+| FR-REP-09 | **Unique Report ID** on every page. Proposed format: `TIMS/<DIV>/<YYYY>/<NNNN>`, for example `TIMS/ACD/2026/0007`. `<DIV>` is a short division code (2–6 letters) entered with the header. `<NNNN>` is a running number for the whole system, reset each year, so IDs stay unique even if two divisions use the same code. IDs are never reused, even if a report is cancelled. | Must |
 | FR-REP-10 | Each generated report is stored as a **JSON file** named after the Report ID (slashes replaced, e.g. `TIMS_ACD_2026_0007.json`), and registered in the database. The generated PDF is also stored. | Must |
 | FR-REP-11 | **Recreate PDF from JSON**: the software reads a stored report JSON, fetches the referenced sample versions from the database, and produces the PDF again with the same content and layout. A report JSON can also be uploaded (e.g. from an archive) to recreate its PDF, as long as the samples exist in the database. | Must |
 | FR-REP-12 | **Integrity check on recreation**: the JSON holds a snapshot of the reported values and a checksum. On recreation the software compares them with the database. If a sample has since been changed, deleted or re-versioned, it warns and shows the differences. The original stored values are used for the recreated PDF, so it always matches the issued report. | Must |
@@ -487,10 +495,8 @@ A4 portrait, 20 mm margins. Values ± U, rounded per FR-CAL-14.
 │        No mass-bias correction applied.                               │
 │                                                                       │
 │   Prepared by                         Checked / Approved by           │
-│   ______________________              ______________________          │
 │   <Name>                              <Name>                          │
 │   <Designation>                       <Designation>                   │
-│   Date: __________                    Date: __________                │
 │                                                                       │
 │ Remarks:                                                              │
 │ <text entered by the report creator>                                  │
@@ -530,19 +536,21 @@ Best for batches, e.g. a natural standard reported with enriched samples. Up to 
 
 **Recommendation:** use Format A as the default. Offer Format B for batches of one element. Mixed elements in one report always use Format A.
 
-### 9.4 Divisional header profile (Administrator setting)
+### 9.4 Divisional header (entered by the user)
 
-```yaml
-code: ACD                       # used in the Report ID
-organisation: "<Organisation name>"
-division: "<Division name>"
-section: "<Section / Laboratory name>"
-address: "<Address line>"
-logo: logos/acd.png
-form_number: "<optional document/form no.>"
-signature_labels: ["Prepared by", "Checked / Approved by"]
-footer_statement: "This report is digitally generated and does not need signatures."
-```
+The report form has a "Header" panel with these fields. The user types them in, or picks a saved header and edits it. A "Save this header" button stores it for later use (FR-REP-03a).
+
+| Field | Required | Example |
+|---|---|---|
+| Division code (for Report ID) | Yes | ACD |
+| Organisation name | Yes | <Organisation name> |
+| Division name | Yes | <Division name> |
+| Section / Laboratory name | No | <Section name> |
+| Address line | No | <Address> |
+| Logo (PNG/JPG, max 1 MB) | No | upload |
+| Document / form number | No | <Form no.> |
+
+The signature labels and the final statement are set by the Administrator for all reports, not per header.
 
 ### 9.5 Report JSON structure
 
@@ -557,7 +565,16 @@ footer_statement: "This report is digitally generated and does not need signatur
   "created_by": "analyst1",
   "software_version": "1.0.0",
   "template": {"name": "format_a", "version": "1.0"},
-  "header_profile": {"code": "ACD", "version": 3},
+  "draft": false,
+  "header": {
+    "division_code": "ACD",
+    "organisation": "<Organisation name>",
+    "division": "<Division name>",
+    "section": "<Section / Laboratory name>",
+    "address": "<Address line>",
+    "form_number": "<Form no.>",
+    "logo_sha256": "<hash of logo file stored with the report>"
+  },
   "content": "atom_percent",
   "layout": "format_a",
   "samples": [
@@ -589,14 +606,14 @@ footer_statement: "This report is digitally generated and does not need signatur
 }
 ```
 
-(The snapshot is shortened here; the real file holds every ratio and isotope.)
+(The snapshot is shortened here; the real file holds every ratio and isotope.) The logo image is saved next to the JSON file, under the report's ID, so the original logo is used when the PDF is recreated.
 
 ### 9.6 Recreating a PDF from JSON
 
 1. Read the JSON and check the checksum. A file that has been altered is refused.
 2. For each sample, find `sample_id` + `record_version` in the database.
 3. Compare the database values with the snapshot. Any differences are shown to the user (FR-REP-12).
-4. Render the PDF with the template version and header profile version named in the JSON. If those versions are not available, use the current ones and add the note "Recreated with template version X".
+4. Render the PDF with the header text, logo and signatories stored in the JSON, and the template version named in it. If that template version is no longer available, use the current one and add the note "Recreated with template version X". A draft report is recreated with its DRAFT marking.
 5. Record the recreation in the audit trail. The Report ID does not change.
 
 ---
@@ -704,7 +721,10 @@ decimal_separator: "."
 | AT-12 | Load 10 natural Yb samples as baseline | Baseline mean/SD per ratio calculated. QC-11 becomes active. |
 | AT-13 | Import a file in a new format after adding an import profile | Parsed correctly without code change. |
 | AT-14 | Two users save the same sample at the same time | The second save is refused with a message. No data lost. |
-| AT-15 | Generate a report for 2 samples (atom %), with header, signatures and remarks | PDF matches Format A. Unique Report ID. JSON stored. Final statement present. |
+| AT-15 | Generate a report for 2 samples (atom %), typing in a new header, with signatories and remarks | PDF matches Format A. Header shows the typed text. Signature blocks show names and designations only. Unique Report ID. JSON stored. Final statement present. |
+| AT-15a | Include one unapproved sample in a report | Report generated with a DRAFT watermark on every page. The sample's status is shown in the table. |
+| AT-15b | Save a header, use it in a report, then edit the saved header and recreate that report's PDF | Recreated PDF still shows the original header. |
+| AT-15c | Fail login 5 times in a row | Account locked for 15 minutes. The lockout is in the audit trail. |
 | AT-16 | Same samples, ratio option | Table shows ratios ± U. |
 | AT-17 | Delete the PDF and recreate it from the JSON | Recreated PDF has the same content as the original. |
 | AT-18 | Change a sample after reporting, then recreate the PDF | Warning lists the differences. Recreated PDF shows the originally reported values. |
@@ -731,17 +751,22 @@ decimal_separator: "."
 | Q-11 | Default tolerances accepted | Section 6.5 / 10 |
 | Q-12 | Export format may differ | FR-IN-10/11, import profiles |
 
-### 12.2 New questions
+### 12.2 Answered (v0.2 questions)
+
+| ID | Answer | Effect on this URD |
+|---|---|---|
+| Q-13 | Unapproved samples can be reported, marked DRAFT | FR-REP-02, FR-REP-02a |
+| Q-14 | Signature blocks show names and designations only | FR-REP-06, mock-up in 9.3 |
+| Q-15 | Accounts made in the app | FR-DATA-05, 05a–05c |
+| Q-17 | Plain virtual machines | ENV-05, ENV-05a, Section 14 |
+| Q-19 | User enters organisation, division, section etc. in the report | FR-REP-03, 03a, 03b, Section 9.4 |
+
+### 12.3 Still open
 
 | ID | Question | Why it matters |
 |---|---|---|
-| Q-13 | Can **unapproved** samples be put in a report (marked DRAFT), or must the software block them completely? | FR-REP-02 |
-| Q-14 | The report has two **signature placeholders** and also says it **does not need signatures**. Should the placeholders print only the names and designations (no lines to sign on)? | Layout of FR-REP-06 |
-| Q-15 | User accounts: local accounts in the app, or login through the organisation's directory (LDAP/Active Directory)? | FR-DATA-05 |
 | Q-16 | About how many users in total, and how many at the same time? | Confirms SQLite is enough (ENV-09) |
-| Q-17 | Does the internal cloud run containers (Docker/Kubernetes) or plain virtual machines? | Deployment package (ENV-05) |
 | Q-18 | Please send **sample export files** in each format the instrument(s) produce. | Import profiles (FR-IN-10) |
-| Q-19 | Division names, codes, logos and the preferred Report ID format. | FR-REP-03/09 |
 | Q-20 | After reading Appendix A: do you want the optional uncertainty budget (FR-CAL-13) and K-factor mass-bias correction (FR-CAL-12) in the first release? Which reference material would be used for K-factors? | Scope of release 1 |
 | Q-21 | For enriched samples, are supplier certificates available as atom % or as ratios? | FR-QC-41 entry form |
 
@@ -767,7 +792,7 @@ tims_reporting/
 │   ├── samples/              # data entry, import, review/approve pages
 │   ├── baselines/            # lab baseline management, control charts
 │   ├── reports/              # report builder, list, recreate from JSON
-│   ├── admin/                # elements, import profiles, tolerances, headers
+│   ├── admin/                # users, elements, import profiles, tolerances
 │   ├── models.py             # SQLAlchemy models (SQLite)
 │   ├── templates/            # Jinja2 HTML pages + report templates
 │   └── static/               # CSS/JS, bundled (no CDN)
@@ -782,7 +807,8 @@ tims_reporting/
 ├── instance/                 # SQLite database, report JSON + PDF files (not in git)
 ├── tests/                    # unit + acceptance tests (Section 11)
 ├── docs/                     # this URD, manuals
-├── Dockerfile                # if containers are used (Q-17)
+├── deploy/                   # VM install script, systemd service file,
+│                             # nginx example config, backup script
 └── wsgi.py                   # entry point for Gunicorn/Waitress
 ```
 
