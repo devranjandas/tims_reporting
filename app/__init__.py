@@ -111,6 +111,9 @@ def create_app(overrides: dict | None = None) -> Flask:
 
     with app.app_context():
         db.create_all()
+        from .services import ensure_signing_key
+
+        ensure_signing_key()
         db.engine.dispose()  # do not hand an open SQLite connection to forked Gunicorn workers
 
     @app.before_request
@@ -137,6 +140,14 @@ def create_app(overrides: dict | None = None) -> Flask:
     @app.errorhandler(404)
     def _not_found(e):
         return render_template("error.html", title="Not found", message="That page or record does not exist."), 404
+
+    from .pdf import PDFUnavailable
+
+    @app.errorhandler(PDFUnavailable)
+    def _no_pdf(e):
+        db.session.rollback()  # nothing is saved, and no report number is used up
+        app.logger.error("PDF output unavailable: %s", e)
+        return render_template("error.html", title="PDF output not available", message=str(e)), 503
 
     @app.errorhandler(413)
     def _too_large(e):

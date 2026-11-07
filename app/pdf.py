@@ -82,7 +82,19 @@ def render_report_html(data: dict, logo: tuple[bytes, str] | None = None, previe
                            preview=preview, tables_b=format_b_tables(data) if data["layout"] == "format_b" else [])
 
 
+class PDFUnavailable(RuntimeError):
+    """WeasyPrint or the Pango system library it needs is not installed."""
+
+
 def render_pdf(data: dict, logo: tuple[bytes, str] | None = None, preview: bool = False) -> bytes:
-    from weasyprint import HTML  # imported here so the rest of the app works without it
+    try:
+        from weasyprint import HTML  # imported here so the rest of the app works without it
+    except (ImportError, OSError) as exc:
+        raise PDFUnavailable(
+            "PDF reports cannot be made on this server because the Pango library that WeasyPrint needs "
+            "is not installed. An administrator must install it (Linux: the 'pango' package; Windows: "
+            "MSYS2 'mingw-w64-x86_64-pango' and WEASYPRINT_DLL_DIRECTORIES). "
+            f"Technical detail: {str(exc).splitlines()[0] if str(exc) else type(exc).__name__}"
+        ) from exc
 
     return HTML(string=render_report_html(data, logo, preview)).write_pdf()

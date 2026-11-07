@@ -35,8 +35,15 @@ flask --app wsgi create-admin   # asks for username, name and password
 flask --app wsgi run            # open http://127.0.0.1:5000
 ```
 
-PDF output uses WeasyPrint, which needs the Pango library. On Linux install `pango`; on Windows see
-the WeasyPrint documentation.
+PDF output uses WeasyPrint, which needs the **Pango** system library. `pip` cannot install it. Without
+it, the app still runs, but making a report shows "PDF output not available".
+
+| System | Install Pango with |
+|---|---|
+| Ubuntu / Debian | `sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0 fonts-dejavu-core` |
+| RHEL / Rocky / Alma | `sudo dnf install -y pango` |
+| macOS | `brew install pango` |
+| Windows | Install [MSYS2](https://www.msys2.org) to `C:\msys64`, run `pacman -S mingw-w64-x86_64-pango` in the "MSYS2 MINGW64" terminal, then set the environment variable `WEASYPRINT_DLL_DIRECTORIES=C:\msys64\mingw64\bin` |
 
 Run the tests with `pytest`.
 

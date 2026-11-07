@@ -467,3 +467,19 @@ def test_backup_command(app, tmp_path):
     with tarfile.open(archive) as tar:
         names = tar.getnames()
     assert any(n.endswith("/tims.db") for n in names) and any("/elements/yb.yaml" in n for n in names)
+
+
+def test_missing_pango_gives_clear_message(app, monkeypatch):
+    import sys
+    monkeypatch.setitem(sys.modules, "weasyprint", None)  # makes "import weasyprint" fail
+    ana = client_for(app, "ana")
+    pk = create_sample(ana)
+    r = ana.post("/reports/new", data=report_form([pk]))
+    assert r.status_code == 503 and b"Pango" in r.data
+    with app.app_context():
+        assert db.session.query(Report).count() == 0
+    monkeypatch.delitem(sys.modules, "weasyprint")
+    ana.post("/reports/new", data=report_form([pk]))
+    with app.app_context():  # the failed attempt did not use up report number 0001
+        assert db.session.query(Report).one().report_id.endswith("/0001")
+    assert not any(Path(app.config["REPORTS_DIR"]).glob("*_0002*"))

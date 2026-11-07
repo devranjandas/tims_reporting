@@ -52,12 +52,20 @@ def get_setting(key: str) -> Any:
 def report_signing_key() -> bytes:
     """Secret key that signs report JSON files. Kept in the database, so backups include it."""
     row = db.session.get(Setting, "report_signing_key")
-    if row is None:
-        import secrets
-        row = Setting(key="report_signing_key", value=secrets.token_hex(32))
-        db.session.add(row)
-        db.session.commit()
+    if row is None:  # created at start-up by ensure_signing_key(); this should not happen
+        raise RuntimeError("the report signing key is missing; restart the application")
     return bytes.fromhex(row.value)
+
+
+def ensure_signing_key() -> None:
+    """Create the report signing key once, at start-up, before anyone can be writing to the database."""
+    import secrets
+
+    from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+    with db.engine.begin() as conn:  # "do nothing" keeps the existing key, also if two workers start at once
+        conn.execute(sqlite_insert(Setting).values(key="report_signing_key", value=secrets.token_hex(32))
+                     .on_conflict_do_nothing())
 
 
 def set_setting(key: str, value: Any) -> None:
