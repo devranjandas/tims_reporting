@@ -9,9 +9,10 @@ from pathlib import Path
 
 from flask import Flask, redirect, render_template, request, session, url_for
 from flask_login import LoginManager, current_user
+from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf.csrf import CSRFError, CSRFProtect
-from sqlalchemy import event
+from sqlalchemy import MetaData, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -21,12 +22,20 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class Base(DeclarativeBase):
-    pass
+    # Fixed names for indexes and constraints, so migrations can change them on SQLite.
+    metadata = MetaData(naming_convention={
+        "ix": "ix_%(column_0_label)s",
+        "uq": "uq_%(table_name)s_%(column_0_name)s",
+        "ck": "ck_%(table_name)s_%(constraint_name)s",
+        "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+        "pk": "pk_%(table_name)s",
+    })
 
 
 db = SQLAlchemy(model_class=Base)
 login_manager = LoginManager()
 csrf = CSRFProtect()
+migrate = Migrate()
 
 
 @event.listens_for(Engine, "connect")
@@ -90,6 +99,9 @@ def create_app(overrides: dict | None = None) -> Flask:
 
     db.init_app(app)
     csrf.init_app(app)
+    from .dbmaint import MIGRATIONS_DIR
+
+    migrate.init_app(app, db, directory=str(MIGRATIONS_DIR), render_as_batch=True)  # batch mode: SQLite ALTER TABLE
     login_manager.init_app(app)
     login_manager.login_view = "auth.login"
     login_manager.login_message = "Please log in."
@@ -110,10 +122,11 @@ def create_app(overrides: dict | None = None) -> Flask:
     register_cli(app)
 
     with app.app_context():
-        db.create_all()
+        from .dbmaint import prepare_database
         from .services import ensure_signing_key
 
-        ensure_signing_key()
+        if prepare_database(app):  # create or upgrade the tables (with a backup first)
+            ensure_signing_key()
         db.engine.dispose()  # do not hand an open SQLite connection to forked Gunicorn workers
 
     @app.before_request

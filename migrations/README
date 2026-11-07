@@ -1,0 +1,13 @@
+Database migrations (Alembic, through Flask-Migrate).
+
+The app applies these automatically when it starts, after writing a backup copy of
+the database to <instance>/backups/. See app/dbmaint.py.
+
+When you change app/models.py:
+  1. flask --app wsgi db migrate --rev-id 0002_short_name -m "what changed"
+  2. Read the new file in migrations/versions/ and correct it if needed
+     (Alembic cannot detect renamed columns, for example).
+  3. Run the tests: tests/test_migrations.py fails if models and migrations differ.
+  4. Commit the new file together with the model change.
+
+Never edit a migration that has already been released; add a new one.

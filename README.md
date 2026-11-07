@@ -23,6 +23,7 @@ The requirements are in [docs/URD.md](docs/URD.md). Built with Python, Flask and
 | `import_profiles/` | Instrument text formats the importer understands |
 | `deploy/` | Install script, systemd service, backup timer, nginx example |
 | `tests/` | Engine and web tests, including the URD acceptance tests |
+| `migrations/` | Database upgrades, applied automatically at start-up |
 | `instance/` | Created at run time: database, report files, history (not in git) |
 
 ## Try it on your own computer
@@ -47,6 +48,38 @@ it, the app still runs, but making a report shows "PDF output not available".
 
 Run the tests with `pytest`.
 
+## Keep your data when you update the app
+
+The database, report files and keys are stored in the **instance folder**. By default that is
+`instance/` inside the code folder, which git ignores, so a fresh `git clone` starts empty. Keep the data
+in its own folder instead, and point the app at it with `TIMS_INSTANCE_DIR`.
+
+**Once:**
+1. Make a data folder outside the code, e.g. `C:\tims-data` or `/var/lib/tims-report`.
+2. Copy the contents of your current `instance/` folder into it.
+3. Set the variable:
+   - Windows: `setx TIMS_INSTANCE_DIR C:\tims-data`, then open a new Command Prompt.
+   - Linux: add `export TIMS_INSTANCE_DIR=/var/lib/tims-report` to `~/.bashrc`.
+
+**Each new version:**
+```bash
+cd tims_reporting
+python -m flask --app wsgi backup      # 1. back up first
+git pull                               # 2. new code (or a fresh clone: it finds the same data)
+pip install -r requirements-dev.txt    # 3. new packages, if any
+python -m flask --app wsgi run         # 4. start
+```
+
+**Database upgrades are automatic.** When a new version changes the database structure, the app
+upgrades your database the next time it starts. It writes a copy of the old database to
+`<instance>/backups/pre-upgrade-....db` first. A database made before upgrades were added is
+recognised and brought up to date the same way, with nothing lost.
+
+**For developers:** if you change `app/models.py`, run
+`flask --app wsgi db migrate --rev-id 0002_short_name -m "what changed"`, check the new file in
+`migrations/versions/`, and commit it. The test `tests/test_migrations.py` fails if you forget.
+See `migrations/README`.
+
 ## Install on a virtual machine
 
 On a Linux VM (RHEL/Rocky/Alma 8+ or Ubuntu 22.04+), from the unpacked application folder:
@@ -65,8 +98,15 @@ This script:
 At the end it prints the command to create the first administrator. Then put nginx in front, using
 `deploy/nginx-tims-report.conf` and a certificate from your internal certificate authority.
 
-Settings live in `/etc/tims-report.env` (see `deploy/tims-report.env.example`). Run the same script
-again to upgrade. Element definitions and import formats edited in the app are kept.
+Settings live in `/etc/tims-report.env` (see `deploy/tims-report.env.example`).
+
+**To upgrade, run the same script again.** It:
+1. stops the service,
+2. installs the new code and packages,
+3. upgrades the database (taking a backup first),
+4. starts the service again.
+
+Element definitions and import formats edited in the app are kept.
 
 **Backups.** `flask --app wsgi backup` writes one `.tar.gz` file holding:
 - a consistent copy of the database (safe to take while users are working),

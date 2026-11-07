@@ -25,6 +25,9 @@ echo "== Service user and folders"
 id tims >/dev/null 2>&1 || useradd --system --home "$DATA_DIR" --shell /sbin/nologin tims
 mkdir -p "$APP_DIR" "$DATA_DIR/backups"
 
+echo "== Stopping the running service (if any) during the upgrade"
+systemctl stop tims-report.service 2>/dev/null || true
+
 echo "== Application files"
 # Element definitions and import formats may have been edited in the app: keep them on upgrade.
 for d in elements import_profiles; do
@@ -46,6 +49,9 @@ if [ ! -f /etc/tims-report.env ]; then
   install -m 600 "$APP_DIR/deploy/tims-report.env.example" /etc/tims-report.env
 fi
 chown -R tims:tims "$DATA_DIR" "$APP_DIR/elements" "$APP_DIR/import_profiles"
+
+echo "== Database upgrade (a backup copy is written to $DATA_DIR/backups first if anything changes)"
+sudo -u tims bash -c "set -a; . /etc/tims-report.env; cd $APP_DIR && .venv/bin/flask --app wsgi db current"
 
 echo "== Services"
 install -m 644 "$APP_DIR/deploy/tims-report.service" /etc/systemd/system/

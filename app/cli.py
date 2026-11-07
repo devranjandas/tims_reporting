@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import getpass
 import shutil
-import sqlite3
 import tarfile
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +13,7 @@ from flask import current_app
 from sqlalchemy import select
 
 from . import db
+from .dbmaint import backup_sqlite
 from .models import User
 from .services import audit
 
@@ -51,12 +51,7 @@ def register_cli(app) -> None:
         work = dest / f"tims-{stamp}"
         work.mkdir()
         try:
-            src = sqlite3.connect(db_path)
-            out = sqlite3.connect(work / "tims.db")
-            with out:
-                src.backup(out)  # SQLite online backup: consistent even while users are working
-            src.close()
-            out.close()
+            backup_sqlite(db_path, work / "tims.db")  # consistent even while users are working
             for name, folder in (("reports", current_app.config["REPORTS_DIR"]),
                                  ("history", current_app.config["HISTORY_DIR"]),
                                  ("elements", current_app.config["ELEMENTS_DIR"]),
