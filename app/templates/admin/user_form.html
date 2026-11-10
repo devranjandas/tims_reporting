@@ -6,6 +6,8 @@
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   {% if not user %}<label>Username <input name="username" value="{{ form.get('username', '') }}" required></label>{% endif %}
   <label>Full name <input name="full_name" value="{{ form.get('full_name', user.full_name if user else '') }}" required></label>
+  <label>Initials <input name="initials" value="{{ form.get('initials', user.initials if user else '') }}" required maxlength="6" pattern="[A-Za-z][A-Za-z0-9]{1,5}" style="text-transform: uppercase" placeholder="e.g. AL"></label>
+  <p class="hint">Initials are picked in the sample forms (filamenting, sample preparation, analysis) and printed on reports. They must be unique.</p>
   <label>Designation <input name="designation" value="{{ form.get('designation', user.designation if user else '') }}"></label>
   <label>Role <select name="role">{% for r in roles %}<option value="{{ r }}" {% if (form.get('role') or (user.role if user else 'analyst')) == r %}selected{% endif %}>{{ role_names[r] }}</option>{% endfor %}</select></label>
   <p class="hint">Viewer: reports only. Analyst: enter data and create reports. Reviewer: also approve, reject and override. Administrator: everything, plus settings.</p>

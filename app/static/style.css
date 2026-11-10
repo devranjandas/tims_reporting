@@ -99,4 +99,19 @@ img.thumb { max-height: 36px; max-width: 80px; }
 .pt { fill: #fff; stroke: #1d2330; stroke-width: 1.4; }
 .pt-member { fill: #1f5fa8; stroke: #1f5fa8; }
 .enriched-only[hidden] { display: none; }
+.picker-wrap { margin: 6px 0; font-size: 13px; color: #3a4252; }
+.picker-label { display: block; margin-bottom: 3px; }
+.req { color: var(--err); }
+details.picker { position: relative; }
+details.picker > summary { list-style: none; cursor: pointer; padding: 6px 28px 6px 8px; border: 1px solid #bfc6d3; border-radius: 5px;
+  background: #fff; color: var(--text); min-height: 32px; position: relative; }
+details.picker > summary::-webkit-details-marker { display: none; }
+details.picker > summary::after { content: "▾"; position: absolute; right: 9px; top: 6px; color: var(--muted); }
+details.picker[open] > summary { border-color: var(--accent); }
+.picker-list { position: absolute; z-index: 20; left: 0; right: 0; min-width: 220px; max-height: 260px; overflow: auto; background: #fff;
+  border: 1px solid #bfc6d3; border-radius: 5px; box-shadow: 0 6px 18px rgba(0,0,0,.12); padding: 4px 0; margin-top: 2px; }
+.picker-list label { display: flex; gap: 8px; align-items: center; margin: 0; padding: 5px 10px; cursor: pointer; white-space: nowrap; }
+.picker-list label:hover { background: #eef2f8; }
+.picker-list label > input { display: inline-block; width: auto; margin: 0; flex: none; }
+.picker-list label b { min-width: 3.2em; }
 @media (max-width: 700px) { main { padding: 12px; } .cols { grid-template-columns: 1fr; } table.data { font-size: 12px; } }

@@ -15,6 +15,7 @@ from tests.test_core import SAMPLE_TEXT, YB_ROWS
 
 ROOT = Path(__file__).resolve().parents[1]
 PASSWORD = "correct-horse-1"
+ADMIN, ANA, REV, VIC = "1", "2", "3", "4"  # user ids made by the fixture
 
 
 @pytest.fixture()
@@ -33,9 +34,9 @@ def app(tmp_path):
     })
     Path(app.config["REPORTS_DIR"]).mkdir(exist_ok=True)
     with app.app_context():
-        for username, role, name in (("admin", "admin", "Admin User"), ("ana", "analyst", "Ana Lyst"),
-                                     ("rev", "reviewer", "Rev Iewer"), ("vic", "viewer", "Vic Viewer")):
-            u = User(username=username, full_name=name, designation=f"{role} designation", role=role,
+        for username, role, name, ini in (("admin", "admin", "Admin User", "AU"), ("ana", "analyst", "Ana Lyst", "AL"),
+                                          ("rev", "reviewer", "Rev Iewer", "RI"), ("vic", "viewer", "Vic Viewer", "VV")):
+            u = User(username=username, full_name=name, initials=ini, designation=f"{role} designation", role=role,
                      must_change_password=False)
             u.set_password(PASSWORD)
             db.session.add(u)
@@ -52,7 +53,8 @@ def client_for(app, username):
 
 def entry_form(rows=YB_ROWS, **meta):
     data = {"element": "Yb", "sample_id": "YB-NAT-01", "sample_type": "Natural", "analysis_date": "2026-10-18",
-            "instrument": "TIMS-1", "analyst_name": "Ana Lyst", "n_measurements": "30", "run_id": "", "batch_ref": "",
+            "instrument": "TIMS-1", "analysis_by": [ANA], "filament_by": [], "sample_prep_by": [],
+            "n_measurements": "30", "run_id": "", "batch_ref": "",
             "enriched_isotope": "", "reference_sample": "", "remarks": "", "rsd_unit": "ppm", "action": "save"}
     data.update(meta)
     data["label"] = [r[0] for r in rows]
@@ -126,7 +128,10 @@ def test_viewer_sees_reports_only(app):
 
 def test_admin_creates_user(app):
     c = client_for(app, "admin")
-    r = c.post("/admin/users/new", data={"username": "newbie", "full_name": "New Bie", "designation": "SO", "role": "analyst"},
+    r = c.post("/admin/users/new", data={"username": "dup", "full_name": "Dup", "initials": "al", "role": "analyst"})
+    assert b"already used by Ana Lyst" in r.data  # initials are unique (and made upper case)
+    r = c.post("/admin/users/new", data={"username": "newbie", "full_name": "New Bie", "initials": "nb",
+                                         "designation": "SO", "role": "analyst"},
                follow_redirects=True)
     m = re.search(rb"Temporary password for newbie: (\S+)", r.data)
     assert m
@@ -153,6 +158,23 @@ def test_paste_then_save(app):  # AT-01 in the app
         s = db.session.get(Sample, pk)
         assert s.results["assumed_natural"] == [168]
         assert not [f for f in s.findings if f["severity"] in ("ERROR", "WARNING")]
+
+
+def test_people_on_sample(app):
+    c = client_for(app, "ana")
+    r = c.post("/samples/new", data=entry_form(analysis_by=[]))
+    assert r.status_code == 400 and b"Analysis by" in r.data  # at least one analyst is required
+    pk = create_sample(c, analysis_by=[ANA, REV], filament_by=[VIC], sample_prep_by=[REV])
+    with app.app_context():
+        s = db.session.get(Sample, pk)
+        assert (s.analysis_by, s.filament_by, s.sample_prep_by) == ([2, 3], [4], [3])
+        assert s.analyst_name == "Ana Lyst, Rev Iewer"
+    page = c.get(f"/samples/{pk}").data.decode()
+    assert "<b>VV</b> Vic Viewer" in page and "Filament preparation by" in page
+    form = c.get(f"/samples/{pk}/edit").data.decode()
+    assert 'name="filament_by" value="4" data-initials="VV" checked' in form
+    assert "AL, RI" in form  # the dropdown shows the chosen initials
+    assert "Ana Lyst, Rev Iewer" in c.get("/samples/?analyst=Rev").data.decode()
 
 
 def test_duplicate_sample_id_refused(app):
@@ -247,10 +269,12 @@ def test_bulk_import_and_csv(app):
     c = client_for(app, "ana")
     text = SAMPLE_TEXT.replace("Yb Nat", "Yb NAT-A") + "\n" + SAMPLE_TEXT.replace("Yb Nat", "Yb NAT-B")
     r = c.post("/samples/bulk", data={"paste": text, "profile": "auto", "sample_type": "Natural",
-                                      "analysis_date": "2026-10-01", "instrument": "TIMS-1", "n_measurements": "30"})
+                                      "analysis_date": "2026-10-01", "instrument": "TIMS-1", "n_measurements": "30",
+                                      "analysis_by": [ANA], "filament_by": [REV]})
     assert r.data.count(b"created as draft (0 errors, 0 warnings)") == 2
     csv_text = c.get("/samples/export.csv").data.decode()
     assert csv_text.count("NAT-A") == 12 and "atom_percent" in csv_text
+    assert ",RI,,AL,ratio," in csv_text  # filament_by, sample_prep_by, analysis_by columns
 
 
 # ---------------------------------------------------------------- baseline
@@ -294,7 +318,7 @@ def test_enriched_uses_batch_reference(app):  # AT-07
 
 def test_report_generate_recreate_and_revise(app):  # AT-15, AT-16, AT-17, AT-18
     ana, rev = client_for(app, "ana"), client_for(app, "rev")
-    pk1 = create_sample(ana)
+    pk1 = create_sample(ana, filament_by=[REV], sample_prep_by=[ANA, REV])
     approve(app, pk1, ana, rev)
     pk2 = create_sample(ana, sample_id="YB-NAT-02")
     approve(app, pk2, ana, rev)
@@ -316,6 +340,10 @@ def test_report_generate_recreate_and_revise(app):  # AT-15, AT-16, AT-17, AT-18
         assert expected in text, expected
     assert "DRAFT" not in text
     assert "____" not in text  # names and designations only, no signature lines
+    flat = " ".join(text.split())
+    assert "Sample type" not in flat and "Analyst AL Analysed" in flat  # analyst initials replace the sample type
+    assert ("Filamenting by: Rev Iewer (RI); Sample preparation by: Ana Lyst (AL), Rev Iewer (RI); "
+            "Analysis by: Ana Lyst (AL).") in flat
     original = text
 
     # AT-17: delete the PDF and recreate it from the JSON

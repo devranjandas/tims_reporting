@@ -15,7 +15,8 @@
   <dl>
     <dt>Analysed</dt><dd>{{ s.analysis_date|fdate }}</dd>
     <dt>Instrument</dt><dd>{{ s.instrument or '–' }}</dd>
-    <dt>Analyst</dt><dd>{{ s.analyst_name or '–' }}</dd>
+    {% for field, label, _ in activities %}<dt>{{ label }}</dt><dd>{% for p in people_of[field] %}<b>{{ p.initials }}</b> {{ p.name }}{{ ', ' if not loop.last }}{% else %}{{ (s.analyst_name or '–') if field == 'analysis_by' else '–' }}{% endfor %}</dd>
+    {% endfor %}
     <dt>n</dt><dd>{{ s.n_measurements }}</dd>
     <dt>Run ID</dt><dd>{{ s.run_id or '–' }}</dd>
     {% if s.sample_type == 'Enriched' %}<dt>Enriched isotope</dt><dd>{% if s.enriched_isotope %}{{ iso_html(s.enriched_isotope, s.element) }}{% else %}–{% endif %}</dd>

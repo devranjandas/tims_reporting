@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "samples/_people.html" import people_picker %}
 {% block title %}Bulk import{% endblock %}
 {% block content %}
 <h1>Bulk import</h1>
@@ -16,6 +17,12 @@
     <label>Instrument <input name="instrument"></label>
     <label>Number of measurements (n) <input type="number" name="n_measurements" value="30" min="1"></label>
   </div>
+  <fieldset>
+    <legend>People, for all imported samples (tick one or more)</legend>
+    <div class="grid3">
+      {% for field, label, _ in activities %}{{ people_picker(field, label, people, form[field], required=(field == 'analysis_by')) }}{% endfor %}
+    </div>
+  </fieldset>
   <button class="primary">Import</button>
 </form>
 {% if results is not none %}

@@ -15,7 +15,7 @@ from tims_core.parsing import ImportProfileError, load_profile_text
 
 from . import db
 from .auth import password_problem
-from .models import ROLE_NAMES, ROLES, AuditLog, User, now
+from .models import INITIALS_PATTERN, ROLE_NAMES, ROLES, AuditLog, User, now
 from .services import audit, get_setting, import_profiles, library, reload_library, set_setting
 from .views_util import role_required
 
@@ -43,10 +43,16 @@ def user_edit(pk: int | None = None):
         f = request.form
         username = f.get("username", "").strip()
         data = {"full_name": f.get("full_name", "").strip(), "designation": f.get("designation", "").strip(),
-                "role": f.get("role", "analyst")}
+                "role": f.get("role", "analyst"), "initials": f.get("initials", "").strip().upper()}
         errors = []
         if not data["full_name"]:
             errors.append("Full name is required.")
+        if not re.fullmatch(INITIALS_PATTERN, data["initials"]):
+            errors.append("Initials must be 2–6 capital letters or digits, starting with a letter (e.g. AL, RKS).")
+        else:
+            other = db.session.scalars(select(User).where(User.initials == data["initials"])).first()
+            if other and (user is None or other.id != user.id):
+                errors.append(f"The initials {data['initials']} are already used by {other.full_name}.")
         if data["role"] not in ROLES:
             errors.append("Choose a role.")
         if user is None:

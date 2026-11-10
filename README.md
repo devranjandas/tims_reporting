@@ -118,8 +118,9 @@ The last 14 backups are kept. To restore, stop the service, unpack a backup, and
 
 ## Daily use
 
-1. **New sample.** Paste the instrument text and press *Read text*, or type the values. Then press
-   *Save and check*.
+1. **New sample.** Paste the instrument text and press *Read text*, or type the values. Pick who did
+   filament preparation, sample preparation and analysis from the initials dropdowns. Then press
+   *Save and check*. (Initials are set for each user on *Admin → Users*.)
 2. **Checks.** Each check gives one of three results:
    - **ERROR** blocks submission. Fix the value, or a reviewer overrides it with a reason.
    - **WARNING** needs a written justification.

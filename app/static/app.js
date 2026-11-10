@@ -61,6 +61,18 @@
     }
   }
 
+  // People dropdowns: show the ticked initials, close when clicking elsewhere
+  document.querySelectorAll("details.picker").forEach((d) => {
+    const show = () => {
+      const picked = Array.from(d.querySelectorAll("input:checked")).map((c) => c.dataset.initials);
+      d.querySelector(".picked").textContent = picked.length ? picked.join(", ") : "– choose –";
+    };
+    d.addEventListener("change", show);
+  });
+  document.addEventListener("click", (ev) => {
+    document.querySelectorAll("details.picker[open]").forEach((d) => { if (!d.contains(ev.target)) d.open = false; });
+  });
+
   // Client-side table filters
   document.querySelectorAll("input.table-filter").forEach((inp) => {
     const table = document.getElementById(inp.dataset.table);

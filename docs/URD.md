@@ -17,6 +17,7 @@
 | 0.1 | 2026-10-19 | First draft |
 | 0.2 | 2026-11-06 | Changed to a multi-user Flask/SQLite web app. Removed atomic-weight calculation (FR-CAL-10). Uncertainty fixed as U = 3 × SD. ¹⁶⁸Yb assumed natural. Enriched samples made fully supported. Lab baseline seeded with 10 samples. ISO 17025 items reduced. Lanthanide scope and interference table added. Configurable import formats. Reporting section fully specified (Section 9). Explanations added for uncertainty budget, ratio correlation and mass-bias correction (Appendix A). Open questions re-issued (Section 12). |
 | 0.3 | 2026-11-06 | Signature blocks show names and designations only. Unapproved samples allowed in reports, marked DRAFT. Local app accounts only (no directory login). Deployment on plain virtual machines (no containers). Report header (organisation, division, section, address) entered by the user creating the report, with reusable saved headers. Header text stored inside the report JSON. |
+| 0.5 | 2026-11-10 | Report no longer shows the sample type; it shows the analyst initials instead. Users have unique initials. Samples record who did filament preparation, sample preparation and analysis (one or more people each, picked by initials). The report adds a small line under the remarks naming them. Side-by-side tables wrap after the ± sign. |
 | 0.4 | 2026-11-06 | About 10 users, 3 at once. No mass-bias correction and no uncertainty budget in release 1. No enriched-material certificates: enriched samples are checked against an earlier approved measurement of the same batch. |
 
 ---
@@ -190,7 +191,8 @@ Priority uses MoSCoW: **Must / Should / Could / Won't (this release)**.
 
 | ID | Requirement | Priority |
 |---|---|---|
-| FR-META-01 | For each measurement, capture: Sample ID, sample type (Natural / Enriched / Standard / Unknown), element, analyst, date and time of analysis, instrument ID, number of measurements n (default 30), filament/run ID, free-text remarks. For enriched samples, also capture the enriched isotope and the material/batch reference. | Must |
+| FR-META-01 | For each measurement, capture: Sample ID, sample type (Natural / Enriched / Standard / Unknown), element, date and time of analysis, instrument ID, number of measurements n (default 30), filament/run ID, free-text remarks. For enriched samples, also capture the enriched isotope and the material/batch reference. | Must |
+| FR-META-01a | **People**: for each sample, record who did **filament preparation**, **sample preparation** and **analysis**. Each is picked from a dropdown of user initials, and each may hold one or more people. "Analysis by" is required and defaults to the logged-in user. | Must |
 | FR-META-02 | Sample type must be selected explicitly. It controls which consistency checks run (Section 6.5). | Must |
 | FR-META-03 | The system records the date/time and user of data entry automatically. | Must |
 | FR-META-04 | Allow several runs (replicate filaments) of the same sample to be entered and combined (weighted mean, scatter between runs). | Should |
@@ -363,7 +365,7 @@ When a value is flagged against its reference (natural, baseline, or expected en
 | FR-DATA-05 | **User login with accounts made in the app** (user answer Q-15; no directory login). Username and password, stored hashed. Role-based permissions (Section 3). A Reviewer cannot approve their own data. | Must |
 | FR-DATA-05a | **Account management** by the Administrator: create users, assign roles, disable accounts (never delete, so the audit trail keeps the names), and reset passwords. Users must change a password set by the Administrator at first login. Users can change their own password. | Must |
 | FR-DATA-05b | **Password rules**: minimum length 10 characters (configurable). The account locks for 15 minutes after 5 failed logins in a row. The first Administrator account is created by a command during installation. | Must |
-| FR-DATA-05c | Each user record holds the full name and designation, used to pre-fill the signature blocks on reports (FR-REP-06). | Must |
+| FR-DATA-05c | Each user record holds the full name, **unique initials** (entered at registration) and designation. Initials are used in the sample forms and reports (FR-META-01a); name and designation pre-fill the signature blocks (FR-REP-06). | Must |
 | FR-DATA-06 | Two users editing the same sample at the same time: the second save is refused with a message, so no data is silently overwritten. | Must |
 | FR-DATA-07 | Session timeout after a configurable idle period (default 30 minutes). | Should |
 | FR-DATA-08 | Scheduled backup of the SQLite database and the report-file folder (using SQLite's online backup), with the number of copies kept configurable. A restore procedure is documented. | Must |
@@ -446,9 +448,11 @@ Summary ──► justify WARNINGs / Reviewer overrides ERRORs ──► Submit 
 | FR-REP-03a | **Saved headers**: the user can save a header under a name and load it in later reports, then change any field before generating. Saved headers are visible to all users, and any user can add new ones. Only the creator or an Administrator can edit or delete a saved header. Changing a saved header never changes reports already generated. | Must |
 | FR-REP-03b | The text of the header used is stored **inside the report JSON** (not just a link to a saved header), so a recreated PDF always shows the original header. | Must |
 | FR-REP-04 | **Measurement table**, with the content **chosen by the user**: (a) isotope ratios with U, or (b) atom % with U. One choice per report. | Must |
+| FR-REP-04a | The sample details in the report show the **analyst initials**, not the sample type. In Format B the "Sample type" row is replaced by an "Analyst" row. In side-by-side tables, a value moves its uncertainty to a second line after the ± sign when the column is too narrow. | Must |
 | FR-REP-05 | Below the table, fixed **notes** generated automatically: "U = 3 × SD (n = 30 measurements)"; reference isotope; isotopes assumed natural (e.g. "¹⁶⁸Yb assumed natural"); mass-bias correction applied or not; reference composition used for checks. | Must |
 | FR-REP-06 | **Two signature placeholders** after the table and notes, side by side: "Prepared by" and "Checked / Approved by". Each shows **only the name and designation** (user answer Q-14): no line to sign on and no date. "Prepared by" is pre-filled from the logged-in user. "Checked / Approved by" is chosen from the list of users (or typed in). The labels can be changed by the Administrator. | Must |
 | FR-REP-07 | **Remarks** area below the signatures, filled with the text entered by the report creator. Shown as "Remarks: Nil" if left empty. | Must |
+| FR-REP-07a | Below the remarks, one line in 9 pt: "Filamenting by: …; Sample preparation by: …; Analysis by: …", giving full names with initials, for all samples in the report. Activities with nobody recorded are left out. | Must |
 | FR-REP-08 | Last line of the report body: **"This report is digitally generated and does not need signatures."** The wording can be changed by the Administrator. | Must |
 | FR-REP-09 | **Unique Report ID** on every page. Proposed format: `TIMS/<DIV>/<YYYY>/<NNNN>`, for example `TIMS/ACD/2026/0007`. `<DIV>` is a short division code (2–6 letters) entered with the header. `<NNNN>` is a running number for the whole system, reset each year, so IDs stay unique even if two divisions use the same code. IDs are never reused, even if a report is cancelled. | Must |
 | FR-REP-10 | Each generated report is stored as a **JSON file** named after the Report ID (slashes replaced, e.g. `TIMS_ACD_2026_0007.json`), and registered in the database. The generated PDF is also stored. | Must |

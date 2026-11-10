@@ -8,7 +8,7 @@ from collections import OrderedDict
 from flask import render_template
 from markupsafe import Markup
 
-TEMPLATE_VERSION = "1.0"
+TEMPLATE_VERSION = "1.1"  # 1.1: analyst initials instead of sample type; people line; wrapping after ±
 FORMAT_B_COLUMNS = 4
 
 
@@ -51,6 +51,25 @@ def build_notes(data: dict) -> list[Markup]:
     return notes
 
 
+def people_line(data: dict) -> list[tuple[str, list[dict]]]:
+    """Who did filamenting, sample preparation and analysis, over all samples in the report.
+
+    Each person appears once per activity, in the order first met. Activities with nobody
+    recorded (e.g. reports made before this was added) are left out.
+    """
+    from .models import ACTIVITIES
+
+    out = []
+    for field, _, wording in ACTIVITIES:
+        seen: dict[tuple, dict] = {}
+        for s in data["samples"]:
+            for p in s.get(field) or []:
+                seen.setdefault((p["initials"], p["name"]), p)
+        if seen:
+            out.append((wording, list(seen.values())))
+    return out
+
+
 def format_b_tables(data: dict) -> list[dict]:
     """Samples side by side, up to FORMAT_B_COLUMNS per table."""
     samples = data["samples"]
@@ -79,6 +98,7 @@ def render_report_html(data: dict, logo: tuple[bytes, str] | None = None, previe
     if logo:
         logo_uri = f"data:{logo[1]};base64,{base64.b64encode(logo[0]).decode()}"
     return render_template("report_pdf/report.html", d=data, notes=build_notes(data), logo_uri=logo_uri,
+                           people_line=people_line(data),
                            preview=preview, tables_b=format_b_tables(data) if data["layout"] == "format_b" else [])
 
 

@@ -17,6 +17,7 @@
     @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 7.5pt "DejaVu Sans", sans-serif; color: #555; }
   }
   body { font: 9.5pt/1.35 "DejaVu Sans", Arial, sans-serif; color: #111; }
+  sup { font-size: 70%; line-height: 0; vertical-align: 0.45em; }  /* mass numbers must not make rows taller */
   .page-header { position: running(pageHeader); width: 174mm; border-bottom: 1.2pt solid #111; padding-bottom: 2mm; }
   .page-header table { width: 100%; border-collapse: collapse; }
   .page-header td { vertical-align: middle; padding: 0; }
@@ -29,15 +30,22 @@
   h1 { font-size: 12.5pt; text-align: center; margin: 0 0 3mm; letter-spacing: .3pt; }
   .idline { display: flex; justify-content: space-between; border-bottom: .6pt solid #999; padding-bottom: 1.5mm; margin-bottom: 4mm; font-size: 9pt; }
   .draft-tag { color: #b00; font-weight: bold; }
-  .sample { page-break-inside: avoid; margin-bottom: 5mm; }
+  .sample { page-break-inside: avoid; margin-bottom: 4mm; }
   table.meta { width: 100%; border-collapse: collapse; margin-bottom: 2mm; font-size: 8.8pt; table-layout: fixed; }
-  table.meta td { padding: .6mm 1.5mm .6mm 0; }
+  table.meta td { padding: .3mm 1.5mm .3mm 0; }
   table.meta td.k { color: #444; }
   table.meta col.k { width: 22mm; } table.meta col.v { width: 78mm; }
   table.res { border-collapse: collapse; margin: 1mm 0 2mm; }
-  table.res th, table.res td { border: .5pt solid #777; padding: .7mm 3mm; }
+  table.res th, table.res td { border: .5pt solid #777; padding: .45mm 3mm; }
   table.res th { background: #eee; font-weight: bold; text-align: center; }
   table.res td.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  /* Side-by-side tables: a value may move its uncertainty to a second line, after the ± sign */
+  table.wide { table-layout: fixed; font-size: 8.6pt; }
+  table.wide th, table.wide td { padding-left: 1.6mm; padding-right: 1.6mm; }
+  table.wide col.first { width: 19mm; }
+  table.wide td.n { white-space: normal; }
+  table.wide .nw { white-space: nowrap; }
+  table.wide th { font-size: 8.5pt; overflow-wrap: anywhere; }
   table.res tr.total td { font-weight: bold; }
   table.wide { width: 100%; }
   .notes { font-size: 8.2pt; margin: 3mm 0 6mm; padding-left: 4mm; }
@@ -49,6 +57,7 @@
   .remarks { margin-bottom: 6mm; }
   .remarks .lbl { font-weight: bold; }
   .remarks .txt { white-space: pre-wrap; }
+  .people { font-size: 9pt; margin-top: 1.5mm; color: #222; }
   .statement { font-style: italic; text-align: center; border-top: .6pt solid #999; padding-top: 2mm; font-size: 8.8pt; }
   .watermark { position: fixed; top: 100mm; left: -18mm; width: 210mm; text-align: center; transform: rotate(-35deg);
                font-size: 40pt; font-weight: bold; color: rgba(180, 0, 0, .13); white-space: nowrap; }
@@ -80,6 +89,7 @@
 {% if d.supersedes %}<p style="font-size:8.5pt">This revision replaces {{ d.supersedes }}. Reason: {{ d.revision_reason }}</p>{% endif %}
 
 {% macro iso(m, sym) %}<sup>{{ m }}</sup>{{ sym }}{% endmacro %}
+{% macro analyst_initials(s) %}{{ s.analyst_initials or s.analyst or '–' }}{% endmacro %}
 {% macro status_note(s) %}{% if s.status != 'Approved' %} <span class="unapproved">({{ s.status }}, not approved)</span>{% endif %}{% endmacro %}
 
 {% if d.layout == 'format_a' %}
@@ -88,9 +98,8 @@
     <table class="meta">
       <colgroup><col class="k"><col class="v"><col class="k"><col></colgroup>
       <tr><td class="k">Sample ID</td><td><b>{{ s.sample_id }}</b>{{ status_note(s) }}</td><td class="k">Element</td><td>{{ s.element_name }} ({{ s.element }})</td></tr>
-      <tr><td class="k">Sample type</td><td>{{ s.sample_type }}{% if s.enriched_isotope %} ({{ iso(s.enriched_isotope, s.element) }} enriched){% endif %}</td><td class="k">Analysed</td><td>{{ s.analysis_date|fdate }}</td></tr>
-      <tr><td class="k">Instrument</td><td>{{ s.instrument or '–' }}</td><td class="k">Analyst</td><td>{{ s.analyst or '–' }}</td></tr>
-      {% if s.batch_ref %}<tr><td class="k">Batch</td><td colspan="3">{{ s.batch_ref }}</td></tr>{% endif %}
+      <tr><td class="k">Analyst</td><td>{{ analyst_initials(s) }}</td><td class="k">Analysed</td><td>{{ s.analysis_date|fdate }}</td></tr>
+      <tr><td class="k">Instrument</td><td>{{ s.instrument or '–' }}</td>{% if s.batch_ref %}<td class="k">Batch</td><td>{{ s.batch_ref }}</td>{% else %}<td></td><td></td>{% endif %}</tr>
     </table>
     {% if d.content == 'ratios' %}
     <table class="res">
@@ -113,14 +122,15 @@
 {% else %}
   {% for t in tables_b %}{% set sym = t.samples[0].element %}
   <table class="res wide">
+    <colgroup><col class="first">{% for s in t.samples %}<col>{% endfor %}</colgroup>
     <tr><th>{{ 'Ratio' if d.content == 'ratios' else 'Isotope' }}</th>{% for s in t.samples %}<th>{{ s.sample_id }}{{ status_note(s) }}<br><span style="font-weight:normal">{{ 'Value ± U' if d.content == 'ratios' else 'Atom % ± U' }}</span></th>{% endfor %}</tr>
     {% for row in t.rows %}
     <tr>
       <td>{% if d.content == 'ratios' %}{% set nd = row.key.split('/') %}{{ iso(nd[0], sym) }}/{{ iso(nd[1], sym) }}{% else %}{{ iso(row.key, sym) }}{% if row.assumed %} *{% endif %}{% endif %}</td>
-      {% for c in row.cells %}<td class="n">{% if c %}{% set p = fmt_pair(c.value, c.U) %}{{ p[0] }} ± {{ p[1] }}{% else %}–{% endif %}</td>{% endfor %}
+      {% for c in row.cells %}<td class="n">{% if c %}{% set p = fmt_pair(c.value, c.U) %}<span class="nw">{{ p[0] }} ±</span> <span class="nw">{{ p[1] }}</span>{% else %}–{% endif %}</td>{% endfor %}
     </tr>
     {% endfor %}
-    <tr><td>Sample type</td>{% for s in t.samples %}<td class="n">{{ s.sample_type }}</td>{% endfor %}</tr>
+    <tr><td>Analyst</td>{% for s in t.samples %}<td class="n">{{ analyst_initials(s) }}</td>{% endfor %}</tr>
     <tr><td>Analysed</td>{% for s in t.samples %}<td class="n">{{ s.analysis_date|fdate }}</td>{% endfor %}</tr>
     <tr><td>Instrument</td>{% for s in t.samples %}<td class="n">{{ s.instrument or '–' }}</td>{% endfor %}</tr>
   </table>
@@ -136,7 +146,9 @@
   {% endfor %}
 </div>
 
-<div class="remarks"><span class="lbl">Remarks:</span> <span class="txt">{{ d.remarks or 'Nil' }}</span></div>
+<div class="remarks"><span class="lbl">Remarks:</span> <span class="txt">{{ d.remarks or 'Nil' }}</span>
+  {% if people_line %}<div class="people">{% for wording, persons in people_line %}{{ wording }}: {% for p in persons %}{{ p.name }} ({{ p.initials }}){{ ', ' if not loop.last }}{% endfor %}{{ '; ' if not loop.last else '.' }}{% endfor %}</div>{% endif %}
+</div>
 
 <p class="statement">{{ d.footer_statement }}</p>
 </div>

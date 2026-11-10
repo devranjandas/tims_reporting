@@ -13,7 +13,7 @@ from tims_core import parsing, qc
 from tims_core.elements import Element, ElementLibrary
 
 from . import db
-from .models import AuditLog, Baseline, Sample, SampleVersion, Setting, now
+from .models import AuditLog, Baseline, Sample, SampleVersion, Setting, User, now
 
 # ----------------------------------------------------------------- libraries
 
@@ -223,7 +223,8 @@ def norm_label(label: str) -> str:
 
 # ----------------------------------------------------------------- versions and snapshots
 
-STATE_FIELDS = ("sample_id", "element", "sample_type", "instrument", "analyst_name", "n_measurements",
+STATE_FIELDS = ("sample_id", "element", "sample_type", "instrument", "analyst_name", "analysis_by", "filament_by",
+                "sample_prep_by", "n_measurements",
                 "run_id", "batch_ref", "enriched_isotope", "reference_sample", "remarks", "rsd_unit",
                 "entries", "results", "findings", "reference_info", "status", "version", "element_def_version",
                 "review_comment")
@@ -271,6 +272,11 @@ def report_snapshot(state: dict) -> dict:
         "analysis_date": state.get("analysis_date"),
         "instrument": state.get("instrument", ""),
         "analyst": state.get("analyst_name", ""),
+        "analyst_initials": ", ".join(p["initials"] for p in people(state.get("analysis_by")))
+                            or state.get("analyst_name", ""),
+        "analysis_by": people(state.get("analysis_by")),
+        "filament_by": people(state.get("filament_by")),
+        "sample_prep_by": people(state.get("sample_prep_by")),
         "n_measurements": state.get("n_measurements"),
         "batch_ref": state.get("batch_ref", ""),
         "enriched_isotope": state.get("enriched_isotope"),
@@ -285,6 +291,23 @@ def report_snapshot(state: dict) -> dict:
         "atom_percent": [{"isotope": a["isotope"], "value": a["atom_pct"], "U": a["U"], "assumed": a["assumed"]}
                          for a in res.get("abundances", [])],
     }
+
+
+def people(ids) -> list[dict]:
+    """[{initials, name}] for a list of user ids, in the order given (unknown ids are skipped)."""
+    out = []
+    for uid in ids or []:
+        u = db.session.get(User, int(uid))
+        if u is not None:
+            out.append({"initials": u.initials, "name": u.full_name})
+    return out
+
+
+def people_choices(selected=()) -> list[User]:
+    """Users offered in the sample form: all active users, plus anyone already selected."""
+    selected = {int(i) for i in selected or []}
+    users = db.session.scalars(select(User).order_by(User.initials)).all()
+    return [u for u in users if u.active or u.id in selected]
 
 
 def parse_date(text: str | None) -> date | None:

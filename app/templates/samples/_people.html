@@ -1,0 +1,16 @@
+{# Dropdown that lets the user tick one or more people. Works without JavaScript too. #}
+{% macro people_picker(field, label, people, selected, required=False) %}
+{% set chosen = people|selectattr('id', 'in', selected|map('int')|list)|list %}
+<div class="picker-wrap">
+  <span class="picker-label">{{ label }}{% if required %} <span class="req" title="required">*</span>{% endif %}</span>
+  <details class="picker">
+    <summary><span class="picked">{% if chosen %}{{ chosen|map(attribute='initials')|join(', ') }}{% else %}– choose –{% endif %}</span></summary>
+    <div class="picker-list">
+      {% for u in people %}
+      <label><input type="checkbox" name="{{ field }}" value="{{ u.id }}" data-initials="{{ u.initials }}" {% if u.id|string in selected %}checked{% endif %}>
+        <b>{{ u.initials }}</b> {{ u.full_name }}{% if not u.active %} <span class="muted">(inactive)</span>{% endif %}</label>
+      {% else %}<p class="muted">No users yet.</p>{% endfor %}
+    </div>
+  </details>
+</div>
+{% endmacro %}

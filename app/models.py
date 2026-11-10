@@ -13,6 +13,11 @@ from . import db, login_manager
 
 ROLES = ("viewer", "analyst", "reviewer", "admin")
 ROLE_NAMES = {"viewer": "Viewer", "analyst": "Analyst", "reviewer": "Reviewer", "admin": "Administrator"}
+INITIALS_PATTERN = r"[A-Z][A-Z0-9]{1,5}"  # e.g. AL, RKS, AB2
+# The three activities recorded on a sample: (field, label on forms, wording in the report)
+ACTIVITIES = (("filament_by", "Filament preparation by", "Filamenting by"),
+              ("sample_prep_by", "Sample preparation by", "Sample preparation by"),
+              ("analysis_by", "Analysis by", "Analysis by"))
 STATUSES = ("Draft", "Submitted", "Approved", "Rejected")
 
 
@@ -24,6 +29,7 @@ class User(UserMixin, db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(64), unique=True)
     full_name: Mapped[str] = mapped_column(String(120))
+    initials: Mapped[str] = mapped_column(String(8), unique=True)  # shown in sample forms and reports
     designation: Mapped[str] = mapped_column(String(120), default="")
     role: Mapped[str] = mapped_column(String(16), default="analyst")
     password_hash: Mapped[str] = mapped_column(String(256))
@@ -70,7 +76,11 @@ class Sample(db.Model):
     sample_type: Mapped[str] = mapped_column(String(16))
     analysis_date: Mapped[date | None]
     instrument: Mapped[str] = mapped_column(String(80), default="")
-    analyst_name: Mapped[str] = mapped_column(String(120), default="")
+    analyst_name: Mapped[str] = mapped_column(String(120), default="")  # full names of analysis_by, for search
+    # People involved, as lists of user ids (each list may hold several people)
+    analysis_by: Mapped[list] = mapped_column(JSON, default=list)
+    filament_by: Mapped[list] = mapped_column(JSON, default=list)
+    sample_prep_by: Mapped[list] = mapped_column(JSON, default=list)
     n_measurements: Mapped[int] = mapped_column(default=30)
     run_id: Mapped[str] = mapped_column(String(80), default="")
     batch_ref: Mapped[str] = mapped_column(String(80), default="")

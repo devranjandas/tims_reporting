@@ -14,17 +14,18 @@ from tims_core import parsing, qc
 from tims_core.qc import deviation_pct
 
 from . import db
-from .models import AuditLog, Sample, SampleVersion, User, now
+from .models import ACTIVITIES, AuditLog, Sample, SampleVersion, User, now
 from .services import (active_baseline, apply_suggestion, audit, batch_reference, element, evaluate,
-                       freeze_version, import_profiles, library, norm_label, open_problems, parse_date,
-                       ratio_values, touch)
+                       freeze_version, import_profiles, library, norm_label, open_problems, parse_date, people,
+                       people_choices, ratio_values, touch)
 from .views_util import role_required
 
 bp = Blueprint("samples", __name__, url_prefix="/samples")
 
-META_FIELDS = ("sample_id", "sample_type", "analysis_date", "instrument", "analyst_name", "n_measurements",
+META_FIELDS = ("sample_id", "sample_type", "analysis_date", "instrument", "n_measurements",
                "run_id", "batch_ref", "enriched_isotope", "reference_sample", "remarks", "rsd_unit")
 SPARE_ROWS = 2
+PEOPLE_FIELDS = tuple(a[0] for a in ACTIVITIES)
 
 
 # ----------------------------------------------------------------- helpers
@@ -59,8 +60,9 @@ def read_upload_text(field: str) -> str:
 
 def blank_form(symbol: str) -> dict:
     return {"sample_id": "", "sample_type": "Natural", "analysis_date": date.today().isoformat(), "instrument": "",
-            "analyst_name": current_user.full_name, "n_measurements": "30", "run_id": "", "batch_ref": "",
-            "enriched_isotope": "", "reference_sample": "", "remarks": "", "rsd_unit": "ppm", "element": symbol}
+            "n_measurements": "30", "run_id": "", "batch_ref": "",
+            "enriched_isotope": "", "reference_sample": "", "remarks": "", "rsd_unit": "ppm", "element": symbol,
+            "analysis_by": [str(current_user.id)], "filament_by": [], "sample_prep_by": []}
 
 
 def default_entries(symbol: str) -> list[dict]:
@@ -71,6 +73,8 @@ def form_from_sample(s: Sample) -> dict:
     d = {k: ("" if getattr(s, k) is None else str(getattr(s, k))) for k in META_FIELDS}
     d["analysis_date"] = s.analysis_date.isoformat() if s.analysis_date else ""
     d["element"] = s.element
+    for f in PEOPLE_FIELDS:
+        d[f] = [str(i) for i in getattr(s, f) or []]
     return d
 
 
@@ -78,6 +82,8 @@ def read_form() -> tuple[dict, list[dict]]:
     form = {k: request.form.get(k, "").strip() for k in META_FIELDS}
     form["remarks"] = request.form.get("remarks", "")
     form["element"] = request.form.get("element", "")
+    for f in PEOPLE_FIELDS:
+        form[f] = read_people(f)
     labels, values, rsds = (request.form.getlist(n) for n in ("label", "value", "rsd"))
     entries = []
     for lbl, v, r in zip(labels, values, rsds):
@@ -86,8 +92,34 @@ def read_form() -> tuple[dict, list[dict]]:
     return form, entries
 
 
-def validate_meta(form: dict, existing: Sample | None = None) -> list[str]:
+def read_people(field: str) -> list[str]:
+    seen = []
+    for v in request.form.getlist(field):
+        if v.isdigit() and v not in seen:
+            seen.append(v)
+    return seen
+
+
+def people_errors(form: dict) -> list[str]:
     errors = []
+    for field, label, _ in ACTIVITIES:
+        for uid in form.get(field, []):
+            if db.session.get(User, int(uid)) is None:
+                errors.append(f"{label}: unknown person.")
+                break
+    if not form.get("analysis_by"):
+        errors.append("Choose at least one person under 'Analysis by'.")
+    return errors
+
+
+def apply_people(s: Sample, form: dict) -> None:
+    for f in PEOPLE_FIELDS:
+        setattr(s, f, [int(i) for i in form.get(f, [])])
+    s.analyst_name = ", ".join(p["name"] for p in people(s.analysis_by))  # kept for searching
+
+
+def validate_meta(form: dict, existing: Sample | None = None) -> list[str]:
+    errors = people_errors(form)
     if form["element"] not in library():
         errors.append("Choose an element.")
         return errors
@@ -125,7 +157,7 @@ def apply_form(s: Sample, form: dict, entries: list[dict]) -> None:
     s.sample_type = form["sample_type"]
     s.analysis_date = parse_date(form["analysis_date"])
     s.instrument = form["instrument"]
-    s.analyst_name = form["analyst_name"]
+    apply_people(s, form)
     s.n_measurements = int(form["n_measurements"])
     s.run_id = form["run_id"]
     s.batch_ref = form["batch_ref"]
@@ -169,7 +201,9 @@ def render_form(mode: str, form: dict, entries: list[dict], sample: Sample | Non
     el = element(symbol) if symbol in library() else None
     rows = list(entries) + [{"label": "", "value": "", "rsd": ""} for _ in range(SPARE_ROWS)]
     profiles, _ = import_profiles()
+    selected = [i for f in PEOPLE_FIELDS for i in form.get(f, [])]
     return render_template("samples/form.html", mode=mode, form=form, rows=rows, el=el, sample=sample,
+                           people=people_choices(selected), activities=ACTIVITIES,
                            elements=[library().get(s) for s in library().symbols()], profiles=profiles,
                            parsed=parsed, errors=errors or [], sample_types=qc.SAMPLE_TYPES)
 
@@ -211,10 +245,11 @@ def export_csv():
     out = io.StringIO()
     w = csv.writer(out)
     w.writerow(["sample_id", "element", "sample_type", "status", "version", "analysis_date", "instrument",
-                "quantity", "label", "value", "rsd_ppm", "U_3SD", "assumed_natural"])
+                "filament_by", "sample_prep_by", "analysis_by", "quantity", "label", "value", "rsd_ppm", "U_3SD", "assumed_natural"])
     for s in db.session.scalars(filtered_query()).all():
         base = [s.sample_id, s.element, s.sample_type, s.status, s.version,
-                s.analysis_date.isoformat() if s.analysis_date else "", s.instrument]
+                s.analysis_date.isoformat() if s.analysis_date else "", s.instrument] + \
+            [" ".join(p["initials"] for p in people(getattr(s, f))) for f in ("filament_by", "sample_prep_by", "analysis_by")]
         res = s.results or {}
         for r in res.get("ratios", []):
             w.writerow(base + ["ratio", r["label"], repr(r["value"]), repr(r["rsd_ppm"]), repr(r["U"]), ""])
@@ -336,7 +371,8 @@ def view(pk: int):
     return render_template("samples/view.html", s=s, el=el, findings=findings, ratio_rows=ratio_rows,
                            abundance_rows=abundance_rows, problems=open_problems(s), baseline=baseline,
                            can_edit=can_edit(s), can_review=can_review(s),
-                           is_owner=s.created_by_id == current_user.id)
+                           is_owner=s.created_by_id == current_user.id, activities=ACTIVITIES,
+                           people_of={f: people(getattr(s, f)) for f in PEOPLE_FIELDS})
 
 
 @bp.route("/<int:pk>/history")
@@ -524,9 +560,17 @@ def revise(pk: int):
 @role_required("analyst")
 def bulk():
     profiles, _ = import_profiles()
+    bulk_form = {f: read_people(f) for f in PEOPLE_FIELDS} if request.method == "POST" else \
+        {"analysis_by": [str(current_user.id)], "filament_by": [], "sample_prep_by": []}
+    page = {"profiles": profiles, "sample_types": qc.SAMPLE_TYPES, "today": date.today().isoformat(),
+            "form": bulk_form, "people": people_choices(), "activities": ACTIVITIES}
     if request.method == "GET":
-        return render_template("samples/bulk.html", profiles=profiles, results=None, sample_types=qc.SAMPLE_TYPES,
-                               today=date.today().isoformat())
+        return render_template("samples/bulk.html", results=None, **page)
+    errors = people_errors(bulk_form)
+    if errors:
+        for e in errors:
+            flash(e, "error")
+        return render_template("samples/bulk.html", results=None, **page), 400
     text = request.form.get("paste", "") or read_upload_text("import_file")
     choice = request.form.get("profile", "auto")
     chosen = [p for p in profiles if p.name == choice]
@@ -553,9 +597,10 @@ def bulk():
             continue
         s = Sample(created_by_id=current_user.id, status="Draft", version=1, sample_id=b.sample, element=b.element,
                    sample_type=sample_type, analysis_date=analysis_date,
-                   instrument=request.form.get("instrument", "").strip(), analyst_name=current_user.full_name,
+                   instrument=request.form.get("instrument", "").strip(),
                    n_measurements=int(request.form.get("n_measurements") or 30), rsd_unit=parsed.rsd_unit,
                    entries=[{"label": r.label_raw, "value": r.mean_raw, "rsd": r.rsd_raw} for r in b.rows])
+        apply_people(s, bulk_form)
         db.session.add(s)
         outcome = evaluate(s)
         db.session.flush()
@@ -565,8 +610,7 @@ def bulk():
         n_warn = len(outcome.by_severity("WARNING"))
         results.append((name, b.element, f"created as draft ({n_err} errors, {n_warn} warnings)", s.id))
     db.session.commit()
-    return render_template("samples/bulk.html", profiles=profiles, results=results, unread=parsed.unread,
-                           sample_types=qc.SAMPLE_TYPES, today=date.today().isoformat())
+    return render_template("samples/bulk.html", results=results, unread=parsed.unread, **page)
 
 
 @bp.app_template_global()

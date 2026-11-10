@@ -25,7 +25,7 @@ from alembic.operations import Operations
 from alembic.script import ScriptDirectory
 from flask import Flask
 from flask_migrate import stamp, upgrade
-from sqlalchemy import inspect, text
+from sqlalchemy import MetaData, Table, inspect, text
 
 from . import db
 
@@ -63,8 +63,10 @@ def adopt_legacy_database(app: Flask) -> None:
     """Make a database created before migrations existed identical to migration 0001.
 
     Those databases have three unnamed UNIQUE rules. Each affected table is rebuilt
-    from the model definition (same columns, same rows), which gives the rules their
-    names. Foreign-key checks are paused while tables are swapped, then verified.
+    from its own existing structure (same columns, same rows); the naming rules of the
+    app give the UNIQUE rules their names. The current models are deliberately not
+    used: they may already have newer columns that later migrations add.
+    Foreign-key checks are paused while tables are swapped, then verified.
     """
     with db.engine.connect() as conn:
         conn.connection.dbapi_connection.execute("PRAGMA foreign_keys=OFF")  # must run outside a transaction
@@ -72,7 +74,9 @@ def adopt_legacy_database(app: Flask) -> None:
             with conn.begin():
                 ops = Operations(MigrationContext.configure(conn))
                 for name in LEGACY_UNNAMED_UNIQUE:
-                    with ops.batch_alter_table(name, recreate="always", copy_from=db.metadata.tables[name]):
+                    existing = Table(name, MetaData(naming_convention=db.metadata.naming_convention),
+                                     autoload_with=conn)
+                    with ops.batch_alter_table(name, recreate="always", copy_from=existing):
                         pass
                 problems = conn.execute(text("PRAGMA foreign_key_check")).fetchall()
                 if problems:

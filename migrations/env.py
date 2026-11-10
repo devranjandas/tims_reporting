@@ -92,14 +92,28 @@ def run_migrations_online():
     connectable = get_engine()
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection,
-            target_metadata=get_metadata(),
-            **conf_args
-        )
+        # SQLite changes a table by rebuilding it. Linked rows (e.g. sample versions pointing
+        # at samples) would block that, so link checks are paused while migrations run and
+        # every link is verified before the changes are saved.
+        sqlite = connection.dialect.name == "sqlite"
+        if sqlite:
+            connection.connection.dbapi_connection.execute("PRAGMA foreign_keys=OFF")  # only works outside a transaction
+        try:
+            context.configure(
+                connection=connection,
+                target_metadata=get_metadata(),
+                **conf_args
+            )
 
-        with context.begin_transaction():
-            context.run_migrations()
+            with context.begin_transaction():
+                context.run_migrations()
+                if sqlite:
+                    broken = connection.exec_driver_sql("PRAGMA foreign_key_check").fetchall()
+                    if broken:
+                        raise RuntimeError(f"Migration left broken links between tables: {broken}")
+        finally:
+            if sqlite:
+                connection.connection.dbapi_connection.execute("PRAGMA foreign_keys=ON")
 
 
 if context.is_offline_mode():
