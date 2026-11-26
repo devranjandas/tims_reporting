@@ -585,3 +585,26 @@ def test_dashboard_counts(app):
     assert "AL,Ana Lyst,0,1,3,0" in csv_text and "not recorded" in csv_text
     years_csv = ana.get("/dashboard/export.csv?table=years&element=Yb").data.decode()
     assert years_csv.splitlines() == ["year,Yb,total", "2025,1,1", "2026,1,1"]
+
+
+def test_two_instances_use_different_cookies(tmp_path):
+    a = create_app({"INSTANCE_DIR": str(tmp_path / "one"), "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'one.db'}"})
+    b = create_app({"INSTANCE_DIR": str(tmp_path / "two"), "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'two.db'}"})
+    assert a.config["SESSION_COOKIE_NAME"] != b.config["SESSION_COOKIE_NAME"]
+    assert a.config["SESSION_COOKIE_NAME"].startswith("tims_")
+
+
+def test_reset_password_and_list_logins_commands(app, monkeypatch):
+    import getpass
+    monkeypatch.setattr(getpass, "getpass", lambda prompt="": "brand-new-pass-1")
+    with app.app_context():
+        u = db.session.query(User).filter_by(username="admin").one()
+        u.failed_logins, u.locked_until = 5, now() + timedelta(minutes=10)
+        db.session.commit()
+    runner = app.test_cli_runner()
+    out = runner.invoke(args=["list-logins"]).output
+    assert "admin" in out and "locked" in out and "Database:" in out
+    r = runner.invoke(args=["reset-password", "admin"])
+    assert r.exit_code == 0, r.output
+    assert app.test_client().post("/login", data={"username": "admin", "password": "brand-new-pass-1"}).status_code == 302
+    assert "Logins in this database" in runner.invoke(args=["reset-password", "nobody"]).output

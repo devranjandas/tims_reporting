@@ -108,6 +108,14 @@ Settings live in `/etc/tims-report.env` (see `deploy/tims-report.env.example`).
 
 Element definitions and import formats edited in the app are kept.
 
+**Lost administrator login?** On the server, from the code folder (with the same `TIMS_INSTANCE_DIR`
+as the running app):
+`python -m flask --app wsgi list-logins` shows the logins in the database the app uses, and
+`python -m flask --app wsgi reset-password <username>` sets a new password and unlocks the login.
+
+**Two instances on one server** (e.g. a test copy on another port) each get their own login cookie,
+so logging in to one does not log you out of the other. Give each its own data folder.
+
 **Backups.** `flask --app wsgi backup` writes one `.tar.gz` file holding:
 - a consistent copy of the database (safe to take while users are working),
 - all report JSON and PDF files,

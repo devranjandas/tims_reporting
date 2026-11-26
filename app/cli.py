@@ -15,7 +15,7 @@ from sqlalchemy import select
 
 from . import db
 from .dbmaint import backup_sqlite
-from .models import INITIALS_PATTERN, User
+from .models import INITIALS_PATTERN, User, now
 from .services import audit
 
 
@@ -48,6 +48,36 @@ def register_cli(app) -> None:
         audit("user_created", "user", username, {"role": "admin", "via": "command line"}, username="system")
         db.session.commit()
         click.echo(f"Administrator {username} created.")
+
+    @app.cli.command("reset-password")
+    @click.argument("username")
+    def reset_password(username):
+        """Set a new password for a login and unlock it (e.g. a forgotten administrator password)."""
+        u = db.session.scalars(select(User).where(User.username == username)).first()
+        if u is None:
+            names = ", ".join(db.session.scalars(select(User.username).where(User.username.is_not(None))).all())
+            raise click.ClickException(f"No login named '{username}'. Logins in this database: {names or 'none'}.")
+        password = getpass.getpass("New password: ")
+        if len(password) < current_app.config["PASSWORD_MIN_LENGTH"]:
+            raise click.ClickException(f"Use at least {current_app.config['PASSWORD_MIN_LENGTH']} characters.")
+        if password != getpass.getpass("Repeat new password: "):
+            raise click.ClickException("The passwords do not match.")
+        u.set_password(password)
+        u.has_login, u.active = True, True
+        u.failed_logins, u.locked_until = 0, None
+        u.must_change_password = False
+        audit("password_reset", "user", username, {"via": "command line"}, username="system")
+        db.session.commit()
+        click.echo(f"Password for {username} reset; the login is active and unlocked.")
+
+    @app.cli.command("list-logins")
+    def list_logins():
+        """Show which logins exist in the database this instance uses."""
+        click.echo(f"Database: {db.engine.url.database}")
+        for u in db.session.scalars(select(User).where(User.username.is_not(None)).order_by(User.username)).all():
+            state = "active" if u.active and u.has_login else "no login" if not u.has_login else "inactive"
+            locked = ", locked" if u.locked_until and u.locked_until > now() else ""
+            click.echo(f"  {u.username:20} {u.role:9} {state}{locked}  ({u.full_name})")
 
     @app.cli.command("backup")
     @click.option("--dest", default=None, help="Backup folder (default: TIMS_BACKUP_DIR or instance/backups).")

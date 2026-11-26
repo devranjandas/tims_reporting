@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import secrets
 from datetime import timedelta
@@ -76,6 +77,10 @@ def create_app(overrides: dict | None = None) -> Flask:
         BACKUP_DIR=os.environ.get("TIMS_BACKUP_DIR", str(instance / "backups")),
         BACKUP_KEEP=int(os.environ.get("TIMS_BACKUP_KEEP", "14")),
         PERMANENT_SESSION_LIFETIME=timedelta(minutes=int(os.environ.get("TIMS_SESSION_MINUTES", "30"))),
+        # Browsers share cookies between ports of one server, so each instance (data folder) gets its
+        # own cookie name; otherwise logging in to one instance logs you out of the other.
+        SESSION_COOKIE_NAME=os.environ.get(
+            "TIMS_SESSION_COOKIE", "tims_" + hashlib.sha1(str(instance.resolve()).encode()).hexdigest()[:10]),
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=os.environ.get("TIMS_SECURE_COOKIES", "0") == "1",
