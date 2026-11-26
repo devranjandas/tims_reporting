@@ -111,8 +111,9 @@
     sel.addEventListener("change", () => {
       const opt = sel.selectedOptions[0];
       if (!opt || !opt.dataset.name) return;
-      document.getElementById(sel.dataset.target + "_name").value = opt.dataset.name;
-      document.getElementById(sel.dataset.target + "_designation").value = opt.dataset.designation || "";
+      ["name", "designation", "division", "group"].forEach((k) => {
+        document.getElementById(sel.dataset.target + "_" + k).value = opt.dataset[k] || "";
+      });
     });
   });
 })();

@@ -26,13 +26,25 @@ def now() -> datetime:
 
 
 class User(UserMixin, db.Model):
+    """A person known to the system.
+
+    * A TIMS workflow person (``in_workflow``) can be picked for filament preparation,
+      sample preparation and analysis.
+    * An application user (``has_login``) has a username, password and role and can log in.
+    A person can be either, or both. People are never deleted, only made inactive.
+    """
+
     id: Mapped[int] = mapped_column(primary_key=True)
-    username: Mapped[str] = mapped_column(String(64), unique=True)
+    username: Mapped[str | None] = mapped_column(String(64), unique=True, default=None)  # only with a login
     full_name: Mapped[str] = mapped_column(String(120))
     initials: Mapped[str] = mapped_column(String(8), unique=True)  # shown in sample forms and reports
     designation: Mapped[str] = mapped_column(String(120), default="")
+    division: Mapped[str] = mapped_column(String(120), default="")
+    group_name: Mapped[str] = mapped_column(String(120), default="")  # "group" is a reserved word in SQL
+    in_workflow: Mapped[bool] = mapped_column(default=True)
+    has_login: Mapped[bool] = mapped_column(default=True)
     role: Mapped[str] = mapped_column(String(16), default="analyst")
-    password_hash: Mapped[str] = mapped_column(String(256))
+    password_hash: Mapped[str | None] = mapped_column(String(256), default=None)
     active: Mapped[bool] = mapped_column(default=True)
     must_change_password: Mapped[bool] = mapped_column(default=True)
     failed_logins: Mapped[int] = mapped_column(default=0)
@@ -40,14 +52,19 @@ class User(UserMixin, db.Model):
     created_at: Mapped[datetime] = mapped_column(default=now)
 
     @property
-    def is_active(self) -> bool:  # used by Flask-Login
-        return self.active
+    def is_active(self) -> bool:  # used by Flask-Login: only active people with a login can be logged in
+        return self.active and self.has_login
 
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password: str) -> bool:
-        return check_password_hash(self.password_hash, password)
+        return bool(self.has_login and self.password_hash) and check_password_hash(self.password_hash, password)
+
+    def signatory(self) -> dict:
+        """The details printed in a report's name block."""
+        return {"name": self.full_name, "designation": self.designation, "division": self.division,
+                "group": self.group_name}
 
     def can(self, *roles: str) -> bool:
         """Role check. Administrators can do everything; reviewers can do everything analysts can."""
@@ -64,7 +81,8 @@ class User(UserMixin, db.Model):
 
 @login_manager.user_loader
 def _load_user(user_id: str):
-    return db.session.get(User, int(user_id))
+    u = db.session.get(User, int(user_id))
+    return u if u is not None and u.is_active else None  # login removed or person made inactive: log out
 
 
 class Sample(db.Model):

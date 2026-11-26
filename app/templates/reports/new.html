@@ -54,13 +54,16 @@
   </section>
 
   <section class="card">
-    <h2>4. Signatures and remarks</h2>
+    <h2>4. Names and remarks</h2>
+    <p class="hint">The report shows two name blocks side by side: name, designation, division and group. Pick a person to fill them in, then change anything if needed.</p>
     <div class="grid2">
       {% for sig in form.signatories %}{% set i = loop.index0 %}
-      <fieldset><legend>{{ sig.label }}</legend>
-        <label>Pick a user <select class="pick-user" data-target="sig{{ i }}"><option value="">–</option>{% for u in users %}<option data-name="{{ u.full_name }}" data-designation="{{ u.designation }}">{{ u.full_name }}</option>{% endfor %}</select></label>
+      <fieldset><legend>{{ 'First' if i == 0 else 'Second' }} name block</legend>
+        <label>Pick a person <select class="pick-user" data-target="sig{{ i }}"><option value="">–</option>{% for u in users %}<option data-name="{{ u.full_name }}" data-designation="{{ u.designation }}" data-division="{{ u.division }}" data-group="{{ u.group_name }}">{{ u.full_name }} ({{ u.initials }})</option>{% endfor %}</select></label>
         <label>Name <input name="sig{{ i }}_name" id="sig{{ i }}_name" value="{{ sig.name }}" required></label>
         <label>Designation <input name="sig{{ i }}_designation" id="sig{{ i }}_designation" value="{{ sig.designation }}"></label>
+        <label>Division <input name="sig{{ i }}_division" id="sig{{ i }}_division" value="{{ sig.division }}"></label>
+        <label>Group <input name="sig{{ i }}_group" id="sig{{ i }}_group" value="{{ sig.group }}"></label>
       </fieldset>{% endfor %}
     </div>
     <label>Remarks <textarea name="remarks" rows="3">{{ form.remarks }}</textarea></label>

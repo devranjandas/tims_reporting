@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+{% macro csv_link(table) %}<a class="small-link" href="{{ url_for('dashboard.export_csv', table=table, **args) }}">CSV</a>{% endmacro %}
+<h1>Dashboard</h1>
+
+<form class="filters" method="get">
+  <label class="inline">From <input type="date" name="from" value="{{ args.get('from', '') }}"></label>
+  <label class="inline">To <input type="date" name="to" value="{{ args.get('to', '') }}"></label>
+  <select name="element"><option value="">All elements</option>{% for e in element_symbols %}<option {% if f.element == e %}selected{% endif %}>{{ e }}</option>{% endfor %}</select>
+  <select name="type"><option value="">All sample types</option>{% for t in sample_types %}<option {% if f.type == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select>
+  <label class="inline"><input type="checkbox" name="all" value="1" {% if f.all %}checked{% endif %}> Include samples not yet approved</label>
+  {% if args.get('year') %}<input type="hidden" name="year" value="{{ args.get('year') }}">{% endif %}
+  <button>Apply</button> <a href="{{ url_for('dashboard.index') }}">Clear</a>
+</form>
+<p class="hint">Counting {{ 'approved, submitted and draft' if f.all else 'approved' }} samples by date of analysis. Rejected samples are never counted.</p>
+
+<div class="tiles">
+  <div class="tile"><span class="num">{{ d.samples_total }}</span><span>samples</span></div>
+  <div class="tile"><span class="num">{{ d.year_total }}</span><span>in {{ d.year }}</span></div>
+  <div class="tile"><span class="num">{{ d.person_rows|length }}</span><span>people with recorded work</span></div>
+</div>
+
+<div class="cols">
+  <section class="card">
+    <div class="heading-row"><h2>Samples per year</h2>{{ csv_link('years') }}</div>
+    {{ year_chart }}
+    <table class="data">
+      <tr><th>Year</th>{% for e in d.elements %}<th class="n">{{ e }}</th>{% endfor %}<th class="n">Total</th></tr>
+      {% for y, c in d.years %}<tr><td><a href="{{ url_for('dashboard.index', **(args.to_dict()|combine_year(y))) }}">{{ y }}</a></td>{% for e in d.elements %}<td class="n">{{ c.get(e, 0) }}</td>{% endfor %}<td class="n"><b>{{ c.values()|sum }}</b></td></tr>{% endfor %}
+      {% if d.no_date %}<tr class="muted"><td>No date</td>{% for e in d.elements %}<td class="n">{{ d.no_date.get(e, 0) }}</td>{% endfor %}<td class="n">{{ d.no_date.values()|sum }}</td></tr>{% endif %}
+    </table>
+    <p class="hint">Click a year to see its months.</p>
+  </section>
+
+  <section class="card">
+    <div class="heading-row"><h2>Samples per month in
+      <form method="get" class="inline">
+        {% for k, v in args.items() if k != 'year' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+        <select name="year" onchange="this.form.submit()">{% for y in (d.all_years or [d.year]) %}<option {% if y == d.year %}selected{% endif %}>{{ y }}</option>{% endfor %}</select>
+        <noscript><button>Show</button></noscript>
+      </form></h2>{{ csv_link('months') }}</div>
+    {{ month_chart }}
+    <table class="data">
+      <tr><th>Month</th>{% for e in d.elements %}<th class="n">{{ e }}</th>{% endfor %}<th class="n">Total</th></tr>
+      {% for m, c in d.months %}<tr><td>{{ m }}</td>{% for e in d.elements %}<td class="n">{{ c.get(e, 0) }}</td>{% endfor %}<td class="n"><b>{{ c.values()|sum }}</b></td></tr>{% endfor %}
+    </table>
+  </section>
+</div>
+
+<section class="card">
+  <div class="heading-row"><h2>Work by person</h2>{{ csv_link('people') }}</div>
+  <p class="hint">A sample with two analysts counts once for each of them, so a column can add up to more than the number of samples.
+    "Reviewed" counts samples this person approved or rejected.</p>
+  <table class="data">
+    <tr><th>Initials</th><th>Name</th>{% for field, label, _ in activities %}<th class="n">{{ label }}</th>{% endfor %}<th class="n">Reviewed</th></tr>
+    {% for r in d.person_rows %}
+    <tr><td><b>{{ r.person.initials }}</b></td><td>{{ r.person.full_name }}{% if not r.person.active %} <span class="muted">(inactive)</span>{% endif %}</td>
+      {% for field, _, _ in activities %}<td class="n">{{ r[field] }}</td>{% endfor %}<td class="n">{{ r.reviewed }}</td></tr>
+    {% else %}<tr><td colspan="6" class="muted">No recorded work for these filters.</td></tr>{% endfor %}
+    {% if d.missing.values()|sum %}
+    <tr class="muted"><td></td><td>Not recorded</td>{% for field, _, _ in activities %}<td class="n">{{ d.missing[field] }}</td>{% endfor %}<td></td></tr>
+    {% endif %}
+  </table>
+</section>
+{% endblock %}

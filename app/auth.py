@@ -32,7 +32,7 @@ def login():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         user = db.session.scalars(select(User).where(User.username == username)).first()
-        if user is None or not user.active:
+        if user is None or not user.active or not user.has_login:
             audit("login_failed", "user", username, username=username or "-")
             db.session.commit()
             flash("Wrong username or password.", "error")

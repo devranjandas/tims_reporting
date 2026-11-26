@@ -88,7 +88,6 @@ def create_app(overrides: dict | None = None) -> Flask:
         DEFAULT_SETTINGS={
             "coverage_k": 3.0,
             "ratio_correlation": 0.0,
-            "signature_labels": ["Prepared by", "Checked / Approved by"],
             "footer_statement": "This report is digitally generated and does not need signatures.",
         },
     )
@@ -110,13 +109,14 @@ def create_app(overrides: dict | None = None) -> Flask:
     from .admin import bp as admin_bp
     from .auth import bp as auth_bp
     from .baselines import bp as baselines_bp
+    from .dashboard import bp as dashboard_bp
     from .cli import register_cli
     from .main import bp as main_bp
     from .reports import bp as reports_bp
     from .samples import bp as samples_bp
     from .views_util import register_template_helpers
 
-    for bp in (auth_bp, main_bp, samples_bp, baselines_bp, reports_bp, admin_bp):
+    for bp in (auth_bp, main_bp, dashboard_bp, samples_bp, baselines_bp, reports_bp, admin_bp):
         app.register_blueprint(bp)
     register_template_helpers(app)
     register_cli(app)

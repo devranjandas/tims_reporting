@@ -1,4 +1,4 @@
-"""Administrator pages: users, element library, import profiles, settings, audit trail."""
+"""Administrator pages: people (users), element library, import profiles, settings, audit trail."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ bp = Blueprint("admin", __name__, url_prefix="/admin")
 @bp.route("/users")
 @role_required("admin")
 def users():
-    rows = db.session.scalars(select(User).order_by(User.active.desc(), User.full_name)).all()
+    rows = db.session.scalars(select(User).order_by(User.active.desc(), User.initials)).all()
     return render_template("admin/users.html", users=rows, role_names=ROLE_NAMES)
 
 
@@ -35,70 +35,104 @@ def users():
 @bp.route("/users/<int:pk>", methods=["GET", "POST"])
 @role_required("admin")
 def user_edit(pk: int | None = None):
+    """Add or change a person: TIMS workflow person, application user (login), or both."""
     user = db.session.get(User, pk) if pk else None
     if pk and user is None:
         abort(404)
-    temp_password = None
-    if request.method == "POST":
-        f = request.form
-        username = f.get("username", "").strip()
-        data = {"full_name": f.get("full_name", "").strip(), "designation": f.get("designation", "").strip(),
-                "role": f.get("role", "analyst"), "initials": f.get("initials", "").strip().upper()}
-        errors = []
-        if not data["full_name"]:
-            errors.append("Full name is required.")
-        if not re.fullmatch(INITIALS_PATTERN, data["initials"]):
-            errors.append("Initials must be 2–6 capital letters or digits, starting with a letter (e.g. AL, RKS).")
-        else:
-            other = db.session.scalars(select(User).where(User.initials == data["initials"])).first()
-            if other and (user is None or other.id != user.id):
-                errors.append(f"The initials {data['initials']} are already used by {other.full_name}.")
-        if data["role"] not in ROLES:
+    if request.method == "GET":
+        return render_person_form(user, {})
+
+    f = request.form
+    action = f.get("action", "save")
+    data = {"full_name": f.get("full_name", "").strip(), "initials": f.get("initials", "").strip().upper(),
+            "designation": f.get("designation", "").strip(), "division": f.get("division", "").strip(),
+            "group_name": f.get("group_name", "").strip(), "in_workflow": bool(f.get("in_workflow")),
+            "has_login": bool(f.get("has_login"))}
+    role = f.get("role", "analyst")
+    username = f.get("username", "").strip()
+    is_self = user is not None and user.id == current_user.id
+    needs_username = data["has_login"] and not (user and user.username)
+
+    errors = []
+    if not data["full_name"]:
+        errors.append("Full name is required.")
+    if not re.fullmatch(INITIALS_PATTERN, data["initials"]):
+        errors.append("Initials must be 2–6 capital letters or digits, starting with a letter (e.g. AL, RKS).")
+    else:
+        other = db.session.scalars(select(User).where(User.initials == data["initials"])).first()
+        if other and (user is None or other.id != user.id):
+            errors.append(f"The initials {data['initials']} are already used by {other.full_name}.")
+    if not data["in_workflow"] and not data["has_login"]:
+        errors.append("Tick 'TIMS workflow person', 'Can log in', or both.")
+    if data["has_login"]:
+        if role not in ROLES:
             errors.append("Choose a role.")
-        if user is None:
+        if needs_username:
             if not re.fullmatch(r"[A-Za-z0-9._-]{3,64}", username):
                 errors.append("Username must be 3–64 letters, digits, dots, dashes or underscores.")
             elif db.session.scalars(select(User).where(User.username == username)).first():
                 errors.append("That username is already taken.")
-        if user is not None and user.id == current_user.id and data["role"] != "admin":
-            errors.append("You cannot remove your own administrator role.")
-        if errors:
-            for e in errors:
-                flash(e, "error")
-            return render_template("admin/user_form.html", user=user, form=f, roles=ROLES, role_names=ROLE_NAMES)
-        if user is None:
+    if is_self and (not data["has_login"] or role != "admin"):
+        errors.append("You cannot remove your own login or administrator role.")
+    if is_self and action == "disable":
+        errors.append("You cannot make yourself inactive.")
+    if action == "reset" and not data["has_login"]:
+        errors.append("Only people who can log in have a password.")
+    if errors:
+        for e in errors:
+            flash(e, "error")
+        return render_person_form(user, f), 400
+
+    temp_password = None
+    if user is None:
+        user = User(**data, role=role if data["has_login"] else "viewer")
+        db.session.add(user)
+        changes = {k: v for k, v in data.items()}
+        action_name = "person_created"
+    else:
+        changes = {k: (getattr(user, k), v) for k, v in data.items() if getattr(user, k) != v}
+        if data["has_login"] and user.role != role:
+            changes["role"] = (user.role, role)
+        for k, v in data.items():
+            setattr(user, k, v)
+        action_name = "person_changed"
+    if data["has_login"]:
+        user.role = role
+        if needs_username:
+            user.username = username
+            changes["username"] = username
+        if not user.password_hash or action == "reset":
             temp_password = secrets.token_urlsafe(9)
-            user = User(username=username, must_change_password=True, **data)
             user.set_password(temp_password)
-            db.session.add(user)
-            audit("user_created", "user", username, data)
-        else:
-            changes = {k: (getattr(user, k), v) for k, v in data.items() if getattr(user, k) != v}
-            for k, v in data.items():
-                setattr(user, k, v)
-            action = f.get("action")
-            if action == "disable" and user.id != current_user.id:
-                user.active = False
-                changes["active"] = (True, False)
-            elif action == "enable":
-                user.active = True
-                user.failed_logins, user.locked_until = 0, None
-                changes["active"] = (False, True)
-            elif action == "reset":
-                temp_password = secrets.token_urlsafe(9)
-                user.set_password(temp_password)
-                user.must_change_password = True
-                user.failed_logins, user.locked_until = 0, None
-                changes["password"] = "reset"
-            audit("user_changed", "user", user.username, changes)
-        db.session.commit()
-        if temp_password:
-            flash(f"Temporary password for {user.username}: {temp_password}  "
-                  "(give it to the user; they must change it at first login).", "info")
-        else:
-            flash("User saved.", "info")
-        return redirect(url_for("admin.users"))
-    return render_template("admin/user_form.html", user=user, form={}, roles=ROLES, role_names=ROLE_NAMES)
+            user.must_change_password = True
+            user.failed_logins, user.locked_until = 0, None
+            changes["password"] = "reset" if action == "reset" else "set"
+    else:
+        # Login removed: the username stays reserved (it is in the audit trail), the password is cleared.
+        if user.password_hash:
+            changes["login"] = "removed"
+        user.password_hash = None
+        user.failed_logins, user.locked_until = 0, None
+    if action == "disable":
+        user.active = False
+        changes["active"] = (True, False)
+    elif action == "enable":
+        user.active = True
+        user.failed_logins, user.locked_until = 0, None
+        changes["active"] = (False, True)
+    db.session.flush()
+    audit(action_name, "user", user.username or user.initials, changes)
+    db.session.commit()
+    if temp_password:
+        flash(f"Temporary password for {user.username}: {temp_password}  "
+              "(give it to the user; they must change it at first login).", "info")
+    else:
+        flash(f"{user.full_name} saved.", "info")
+    return redirect(url_for("admin.users"))
+
+
+def render_person_form(user, form):
+    return render_template("admin/user_form.html", user=user, form=form, roles=ROLES, role_names=ROLE_NAMES)
 
 
 # ----------------------------------------------------------------- element and import-profile files
@@ -221,15 +255,14 @@ def settings():
                 raise ValueError
         except ValueError:
             errors.append("Correlation must be between -1 and 1.")
-        labels = [request.form.get("sig0", "").strip(), request.form.get("sig1", "").strip()]
         footer = request.form.get("footer_statement", "").strip()
-        if not all(labels) or not footer:
-            errors.append("Signature labels and the final statement cannot be empty.")
+        if not footer:
+            errors.append("The final statement cannot be empty.")
         if errors:
             for e in errors:
                 flash(e, "error")
         else:
-            new = {"coverage_k": k, "ratio_correlation": rho, "signature_labels": labels, "footer_statement": footer}
+            new = {"coverage_k": k, "ratio_correlation": rho, "footer_statement": footer}
             old = {key: get_setting(key) for key in new}
             for key, v in new.items():
                 set_setting(key, v)

@@ -68,6 +68,7 @@ def test_database_from_before_migrations_is_adopted(tmp_path):
         from app.models import Report, Sample, User
         old = db.session.query(User).filter_by(username="old").one()
         assert (old.full_name, old.initials) == ("Old User", "OU")  # initials made from the name (0002)
+        assert (old.has_login, old.in_workflow, old.division) == (True, True, "")  # existing users keep logins (0003)
         assert db.session.query(Report).one().created_by_id == 1
         s = db.session.query(Sample).one()
         assert (s.analyst_name, s.analysis_by, len(s.versions)) == ("Old User", [], 1)

@@ -120,7 +120,7 @@ The last 14 backups are kept. To restore, stop the service, unpack a backup, and
 
 1. **New sample.** Paste the instrument text and press *Read text*, or type the values. Pick who did
    filament preparation, sample preparation and analysis from the initials dropdowns. Then press
-   *Save and check*. (Initials are set for each user on *Admin → Users*.)
+   *Save and check*. (People and their initials are set on *Admin → People*.)
 2. **Checks.** Each check gives one of three results:
    - **ERROR** blocks submission. Fix the value, or a reviewer overrides it with a reason.
    - **WARNING** needs a written justification.
@@ -141,6 +141,26 @@ The last 14 backups are kept. To restore, stop the service, unpack a backup, and
    - *Recreate* checks the JSON and draws the PDF again, warning you if any sample has changed since.
    - *Revise* issues the same ID with `-R1`, `-R2` and a reason.
    - Any report JSON can also be uploaded to recreate its PDF.
+
+### People
+
+*Admin → People* lists everyone the system knows, with initials, designation, division and group.
+Each person has two tick boxes:
+
+- **TIMS workflow person**: can be picked for filament preparation, sample preparation and analysis.
+  No login is needed.
+- **Can log in**: an application user with a username, password and role.
+
+Tick either or both. Adding a login gives a temporary password. Removing it logs the person out.
+Approving samples always needs a login with the Reviewer role. People without a login can still be
+named in the report's name blocks.
+
+### Dashboard
+
+*Dashboard* shows samples per year and per month, split by element, and the work done by each
+person: analysed, prepared, filaments made, reviewed. By default it counts approved samples by date
+of analysis, and there is an option to include samples not yet approved. Each table can be exported
+to CSV.
 
 ### Adding an element
 

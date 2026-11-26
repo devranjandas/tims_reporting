@@ -284,21 +284,19 @@ def selectable_samples() -> list[Sample]:
     return db.session.scalars(select(Sample).order_by(Sample.analysis_date.desc(), Sample.id.desc()).limit(5000)).all()
 
 
+SIGNATORY_FIELDS = ("name", "designation", "division", "group")
+
+
 def form_defaults() -> dict:
-    labels = get_setting("signature_labels")
     return {
         "header": {k: "" for k in HEADER_FIELDS},
         "content": "atom_percent", "layout": "format_a", "remarks": "",
-        "signatories": [
-            {"label": labels[0], "name": current_user.full_name, "designation": current_user.designation},
-            {"label": labels[1], "name": "", "designation": ""},
-        ],
+        "signatories": [current_user.signatory(), {k: "" for k in SIGNATORY_FIELDS}],
         "selected": [], "saved_header_id": "", "revision_reason": "",
     }
 
 
 def read_report_form() -> dict:
-    labels = get_setting("signature_labels")
     f = request.form
     header = {k: f.get(k, "").strip() for k in HEADER_FIELDS}
     header["division_code"] = header["division_code"].upper()
@@ -307,10 +305,7 @@ def read_report_form() -> dict:
         "content": f.get("content", "atom_percent"),
         "layout": f.get("layout", "format_a"),
         "remarks": f.get("remarks", "").strip(),
-        "signatories": [
-            {"label": labels[i], "name": f.get(f"sig{i}_name", "").strip(),
-             "designation": f.get(f"sig{i}_designation", "").strip()} for i in (0, 1)
-        ],
+        "signatories": [{k: f.get(f"sig{i}_{k}", "").strip() for k in SIGNATORY_FIELDS} for i in (0, 1)],
         "selected": [int(x) for x in f.getlist("sample") if x.isdigit()],
         "saved_header_id": f.get("saved_header_id", ""),
         "save_header_name": f.get("save_header_name", "").strip(),
@@ -320,7 +315,7 @@ def read_report_form() -> dict:
 
 
 def render_report_form(form: dict, revise_of: Report | None = None, errors=None, status=200):
-    users = db.session.scalars(select(User).where(User.active.is_(True)).order_by(User.full_name)).all()
+    users = db.session.scalars(select(User).where(User.active.is_(True)).order_by(User.full_name)).all()  # anyone, login or not
     saved = db.session.scalars(select(SavedHeader).order_by(SavedHeader.name)).all()
     saved_js = {str(h.id): {**h.fields(), "has_logo": bool(h.logo)} for h in saved}
     return render_template("reports/new.html", form=form, samples=selectable_samples(), users=users,
@@ -358,9 +353,9 @@ def new():
     no_results = [s.sample_id for s in samples if not s.results]
     if no_results:
         errors.append("These samples have no results yet (fix their entry errors first): " + ", ".join(no_results))
-    for sig in form["signatories"]:
+    for which, sig in zip(("first", "second"), form["signatories"]):
         if not sig["name"]:
-            errors.append(f"Enter the name for '{sig['label']}'.")
+            errors.append(f"Enter the name for the {which} name block.")
     if revise_of and not form["revision_reason"]:
         errors.append("Give the reason for this revision.")
     logo, logo_err = read_logo_upload()
@@ -499,7 +494,7 @@ def prefill_from_report(r: Report, form: dict) -> dict:
     sigs = data.get("signatories") or []
     for i in (0, 1):
         if i < len(sigs):
-            form["signatories"][i].update(name=sigs[i].get("name", ""), designation=sigs[i].get("designation", ""))
+            form["signatories"][i].update({k: sigs[i].get(k, "") for k in SIGNATORY_FIELDS})
     ids = []
     for snap in data["samples"]:
         s = db.session.scalars(select(Sample).where(Sample.element == snap["element"],

@@ -11,6 +11,7 @@
   <a class="brand" href="{{ url_for('main.index') }}">TIMS-Report</a>
   {% if current_user.is_authenticated %}
   <nav>
+    <a href="{{ url_for('dashboard.index') }}">Dashboard</a>
     {% if current_user.can('analyst') %}
       <a href="{{ url_for('samples.index') }}">Samples</a>
       <a href="{{ url_for('samples.new') }}">New sample</a>
@@ -21,7 +22,7 @@
     {% if current_user.can('analyst') %}<a href="{{ url_for('reports.new') }}">New report</a>{% endif %}
     {% if current_user.can('admin') %}
       <span class="nav-sep"></span>
-      <a href="{{ url_for('admin.users') }}">Users</a>
+      <a href="{{ url_for('admin.users') }}">People</a>
       <a href="{{ url_for('admin.files', kind='elements') }}">Elements</a>
       <a href="{{ url_for('admin.files', kind='profiles') }}">Import formats</a>
       <a href="{{ url_for('admin.settings') }}">Settings</a>

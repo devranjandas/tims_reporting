@@ -1,25 +1,55 @@
 {% extends "base.html" %}
-{% block title %}{{ 'Edit' if user else 'New' }} user{% endblock %}
+{% block title %}{{ 'Edit' if user else 'Add' }} person{% endblock %}
 {% block content %}
-<h1>{% if user %}Edit {{ user.username }}{% else %}New user{% endif %}</h1>
-<form method="post" class="card narrow">
+{%- macro val(name, default='') -%}{{ form.get(name, default) if form else default }}{%- endmacro %}
+<h1>{% if user %}Edit {{ user.full_name }}{% else %}Add a person{% endif %}</h1>
+<form method="post" class="card narrow" id="person-form">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  {% if not user %}<label>Username <input name="username" value="{{ form.get('username', '') }}" required></label>{% endif %}
-  <label>Full name <input name="full_name" value="{{ form.get('full_name', user.full_name if user else '') }}" required></label>
-  <label>Initials <input name="initials" value="{{ form.get('initials', user.initials if user else '') }}" required maxlength="6" pattern="[A-Za-z][A-Za-z0-9]{1,5}" style="text-transform: uppercase" placeholder="e.g. AL"></label>
-  <p class="hint">Initials are picked in the sample forms (filamenting, sample preparation, analysis) and printed on reports. They must be unique.</p>
-  <label>Designation <input name="designation" value="{{ form.get('designation', user.designation if user else '') }}"></label>
-  <label>Role <select name="role">{% for r in roles %}<option value="{{ r }}" {% if (form.get('role') or (user.role if user else 'analyst')) == r %}selected{% endif %}>{{ role_names[r] }}</option>{% endfor %}</select></label>
-  <p class="hint">Viewer: reports only. Analyst: enter data and create reports. Reviewer: also approve, reject and override. Administrator: everything, plus settings.</p>
+  <label>Full name <input name="full_name" value="{{ val('full_name', user.full_name if user else '') }}" required></label>
+  <label>Initials <input name="initials" value="{{ val('initials', user.initials if user else '') }}" required maxlength="6" pattern="[A-Za-z][A-Za-z0-9]{1,5}" style="text-transform: uppercase" placeholder="e.g. AL"></label>
+  <p class="hint">Initials are picked in the sample forms and printed on reports. They must be unique.</p>
+  <label>Designation <input name="designation" value="{{ val('designation', user.designation if user else '') }}"></label>
+  <label>Division <input name="division" value="{{ val('division', user.division if user else '') }}"></label>
+  <label>Group <input name="group_name" value="{{ val('group_name', user.group_name if user else '') }}"></label>
+  <p class="hint">Name, designation, division and group are printed in the name blocks at the foot of reports.</p>
+
+  {% set wf = (form.get('in_workflow') if form else (user.in_workflow if user else true)) %}
+  {% set hl = (form.get('has_login') if form else (user.has_login if user else false)) %}
+  <fieldset>
+    <legend>What this person does</legend>
+    <label class="inline"><input type="checkbox" name="in_workflow" value="1" {% if wf %}checked{% endif %}> TIMS workflow person (filamenting, sample preparation, analysis)</label>
+    <label class="inline"><input type="checkbox" name="has_login" value="1" id="has-login" {% if hl %}checked{% endif %}> Can log in (application user)</label>
+  </fieldset>
+
+  <fieldset id="login-fields">
+    <legend>Login</legend>
+    {% if user and user.username %}
+      <label>Username <input value="{{ user.username }}" disabled></label>
+    {% else %}
+      <label>Username <input name="username" value="{{ val('username') }}" autocomplete="off"></label>
+    {% endif %}
+    <label>Role <select name="role">{% for r in roles %}<option value="{{ r }}" {% if (val('role') or (user.role if user else 'analyst')) == r %}selected{% endif %}>{{ role_names[r] }}</option>{% endfor %}</select></label>
+    <p class="hint">Viewer: reports and dashboard only. Analyst: enter data and create reports. Reviewer: also approve, reject and override. Administrator: everything, plus settings.
+      A temporary password is shown after saving when a login is created or reset.</p>
+  </fieldset>
+
   <div class="actions">
     <button class="primary">Save</button>
     {% if user %}
-      <button name="action" value="reset">Reset password</button>
-      {% if user.active %}{% if user.id != current_user.id %}<button name="action" value="disable" class="danger">Disable account</button>{% endif %}
-      {% else %}<button name="action" value="enable">Enable account</button>{% endif %}
+      {% if user.has_login %}<button name="action" value="reset">Reset password</button>{% endif %}
+      {% if user.active %}{% if user.id != current_user.id %}<button name="action" value="disable" class="danger">Make inactive</button>{% endif %}
+      {% else %}<button name="action" value="enable">Make active</button>{% endif %}
     {% endif %}
     <a href="{{ url_for('admin.users') }}">Cancel</a>
   </div>
-  {% if not user %}<p class="hint">A temporary password is shown after saving. The user must change it at first login.</p>{% endif %}
 </form>
+{% endblock %}
+{% block scripts %}
+<script>
+  (function () {
+    const box = document.getElementById("has-login"), fields = document.getElementById("login-fields");
+    const sync = () => { fields.hidden = !box.checked; };
+    box.addEventListener("change", sync); sync();
+  })();
+</script>
 {% endblock %}

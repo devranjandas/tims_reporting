@@ -8,7 +8,7 @@ from collections import OrderedDict
 from flask import render_template
 from markupsafe import Markup
 
-TEMPLATE_VERSION = "1.1"  # 1.1: analyst initials instead of sample type; people line; wrapping after ±
+TEMPLATE_VERSION = "1.2"  # 1.2: name blocks without headings (name, designation, division, group); no mass-bias note
 FORMAT_B_COLUMNS = 4
 
 
@@ -38,7 +38,6 @@ def build_notes(data: dict) -> list[Markup]:
             iso = ", ".join(str(_iso(a, sym)) for a in sorted(e["assumed"]))
             src = f" ({e['source']})" if e["source"] else ""
             notes.append(Markup(f"* {iso} was not measured; its natural isotope ratio{src} was assumed."))
-    notes.append(Markup("No mass-bias correction applied."))
     if data["content"] == "atom_percent":
         rhos = {s.get("rho") or 0.0 for s in samples}
         corr = "ratios treated as uncorrelated" if rhos == {0.0} else \

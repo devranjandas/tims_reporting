@@ -39,7 +39,9 @@ def register_cli(app) -> None:
             raise click.ClickException(f"Use at least {current_app.config['PASSWORD_MIN_LENGTH']} characters.")
         if password != getpass.getpass("Repeat password: "):
             raise click.ClickException("The passwords do not match.")
+        # An administrator logs in; tick "TIMS workflow person" on the People page if they also do TIMS work.
         u = User(username=username, full_name=full_name, initials=initials, designation=designation, role="admin",
+                 has_login=True, in_workflow=False,
                  must_change_password=False)
         u.set_password(password)
         db.session.add(u)

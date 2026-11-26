@@ -80,8 +80,9 @@ def report_form(sample_ids, **extra):
     data = {"sample": [str(i) for i in sample_ids], "division_code": "ACD", "organisation": "Test Organisation",
             "division": "Analytical Chemistry Division", "section": "Mass Spectrometry Section", "address": "Somewhere",
             "form_number": "F-01", "content": "atom_percent", "layout": "format_a",
-            "sig0_name": "Ana Lyst", "sig0_designation": "Scientific Officer",
-            "sig1_name": "Rev Iewer", "sig1_designation": "Head, MSS", "remarks": "Measured on filament 3.",
+            "sig0_name": "Ana Lyst", "sig0_designation": "Scientific Officer", "sig0_division": "Analytical Chem Div",
+            "sig0_group": "TIMS Group", "sig1_name": "Rev Iewer", "sig1_designation": "Head, MSS",
+            "sig1_division": "Analytical Chem Div", "sig1_group": "Mass Spec Section", "remarks": "Measured on filament 3.",
             "action": "generate"}
     data.update(extra)
     return data
@@ -128,10 +129,13 @@ def test_viewer_sees_reports_only(app):
 
 def test_admin_creates_user(app):
     c = client_for(app, "admin")
-    r = c.post("/admin/users/new", data={"username": "dup", "full_name": "Dup", "initials": "al", "role": "analyst"})
+    r = c.post("/admin/users/new", data={"username": "dup", "full_name": "Dup", "initials": "al", "role": "analyst",
+                                         "has_login": "1"})
     assert b"already used by Ana Lyst" in r.data  # initials are unique (and made upper case)
+    r = c.post("/admin/users/new", data={"full_name": "Nobody", "initials": "NO"})
+    assert r.status_code == 400 and b"or both" in r.data  # must be a workflow person, a user, or both
     r = c.post("/admin/users/new", data={"username": "newbie", "full_name": "New Bie", "initials": "nb",
-                                         "designation": "SO", "role": "analyst"},
+                                         "designation": "SO", "role": "analyst", "has_login": "1"},
                follow_redirects=True)
     m = re.search(rb"Temporary password for newbie: (\S+)", r.data)
     assert m
@@ -334,12 +338,15 @@ def test_report_generate_recreate_and_revise(app):  # AT-15, AT-16, AT-17, AT-18
     assert data["header"]["division"] == "Analytical Chemistry Division"
     assert [s["sample_id"] for s in data["samples"]] == ["YB-NAT-01", "YB-NAT-02"]
     text = pdf_text(rdir / f"{stem}.pdf")
-    for expected in (f"TIMS/ACD/{year}/0001", "Analytical Chemistry Division", "Test Organisation", "Prepared by",
+    for expected in (f"TIMS/ACD/{year}/0001", "Analytical Chemistry Division", "Test Organisation",
+                     "Analytical Chem Div", "TIMS Group", "Mass Spec Section",
                      "Ana Lyst", "Head, MSS", "Remarks:", "Measured on filament 3.", "3.0322", "0.0031",
                      "This report is digitally generated and does not need signatures.", "Page 1 of"):
         assert expected in text, expected
     assert "DRAFT" not in text
     assert "____" not in text  # names and designations only, no signature lines
+    assert "Prepared by" not in text and "Approved by" not in text  # no headings on the name blocks
+    assert "mass-bias" not in text
     flat = " ".join(text.split())
     assert "Sample type" not in flat and "Analyst AL Analysed" in flat  # analyst initials replace the sample type
     assert ("Filamenting by: Rev Iewer (RI); Sample preparation by: Ana Lyst (AL), Rev Iewer (RI); "
@@ -420,7 +427,7 @@ def test_report_form_validation(app):
     r = ana.post("/reports/new", data=report_form([], division_code="1", sig1_name=""))
     html = r.data.decode()
     assert r.status_code == 400
-    assert "Division code" in html and "Select at least one sample" in html and "Checked / Approved by" in html
+    assert "Division code" in html and "Select at least one sample" in html and "second name block" in html
 
 
 def test_preview_pdf(app):
@@ -475,14 +482,14 @@ def test_admin_adds_element_and_rejects_bad_file(app):  # AT-08, AT-09
 
 def test_admin_settings_change_k(app):
     c = client_for(app, "admin")
-    c.post("/admin/settings", data={"coverage_k": "2", "ratio_correlation": "0", "sig0": "Prepared by",
-                                    "sig1": "Approved by", "footer_statement": "Digitally generated."})
+    c.post("/admin/settings", data={"coverage_k": "2", "ratio_correlation": "0", "footer_statement": "Digitally generated."})
     ana = client_for(app, "ana")
     pk = create_sample(ana)
     with app.app_context():
         s = db.session.get(Sample, pk)
         assert s.results["k"] == 2.0
-    assert b"Approved by" in ana.get("/reports/new").data
+    pdf = ana.post("/reports/new", data=report_form([pk], action="preview")).data
+    assert pdf.startswith(b"%PDF")
 
 
 def test_backup_command(app, tmp_path):
@@ -511,3 +518,70 @@ def test_missing_pango_gives_clear_message(app, monkeypatch):
     with app.app_context():  # the failed attempt did not use up report number 0001
         assert db.session.query(Report).one().report_id.endswith("/0001")
     assert not any(Path(app.config["REPORTS_DIR"]).glob("*_0002*"))
+
+
+# ---------------------------------------------------------------- people without login, dashboard
+
+def test_person_without_login(app):
+    c = client_for(app, "admin")
+    r = c.post("/admin/users/new", data={"full_name": "Fila Ment", "initials": "fm", "designation": "Technician",
+                                         "division": "ACD", "group_name": "TIMS", "in_workflow": "1"},
+               follow_redirects=True)
+    assert b"Fila Ment saved" in r.data and b"Temporary password" not in r.data
+    with app.app_context():
+        p = db.session.query(User).filter_by(initials="FM").one()
+        assert (p.username, p.password_hash, p.has_login, p.in_workflow) == (None, None, False, True)
+        pid = str(p.id)
+    ana = client_for(app, "ana")
+    assert f'name="filament_by" value="{pid}"'.encode() in ana.get("/samples/new").data  # offered in the dropdowns
+    pk = create_sample(ana, filament_by=[pid])
+    with app.app_context():
+        assert db.session.get(Sample, pk).filament_by == [int(pid)]
+    # offered for the report name blocks too, with division and group
+    assert b'data-division="ACD" data-group="TIMS">Fila Ment (FM)' in ana.get("/reports/new").data
+    # a login can be added later: a temporary password is issued
+    r = c.post(f"/admin/users/{pid}", data={"full_name": "Fila Ment", "initials": "FM", "in_workflow": "1",
+                                             "has_login": "1", "username": "fila", "role": "viewer"},
+               follow_redirects=True)
+    password = re.search(rb"Temporary password for fila: (\S+)", r.data).group(1).decode()
+    fila = app.test_client()
+    assert fila.post("/login", data={"username": "fila", "password": password}).status_code == 302
+    # ... and removed again: the open session ends and logging in fails
+    c.post(f"/admin/users/{pid}", data={"full_name": "Fila Ment", "initials": "FM", "in_workflow": "1"})
+    assert fila.get("/dashboard").status_code == 302
+    assert fila.post("/login", data={"username": "fila", "password": password}).status_code == 401
+
+
+def test_non_workflow_user_not_in_dropdowns(app):
+    c = client_for(app, "admin")
+    c.post(f"/admin/users/{VIC}", data={"full_name": "Vic Viewer", "initials": "VV", "has_login": "1", "role": "viewer"})
+    page = client_for(app, "ana").get("/samples/new").data
+    assert f'name="analysis_by" value="{VIC}"'.encode() not in page
+    assert f'name="analysis_by" value="{ANA}"'.encode() in page
+    # the administrator cannot remove their own login
+    r = c.post(f"/admin/users/{ADMIN}", data={"full_name": "Admin User", "initials": "AU", "in_workflow": "1"})
+    assert r.status_code == 400 and b"own login" in r.data
+
+
+def test_dashboard_counts(app):
+    ana, rev = client_for(app, "ana"), client_for(app, "rev")
+    a = create_sample(ana, sample_id="A", analysis_date="2025-03-10", filament_by=[REV], sample_prep_by=[ANA, REV])
+    b = create_sample(ana, sample_id="B", analysis_date="2026-03-02", analysis_by=[ANA, REV])
+    create_sample(ana, sample_id="C", analysis_date="2026-07-15")  # stays a draft
+    lu = create_sample(ana, [("176/175", "0.02668", "300")], element="Lu", sample_id="L", analysis_date="2026-03-20")
+    for pk in (a, b, lu):
+        approve(app, pk, ana, rev)
+    page = client_for(app, "vic").get("/dashboard?year=2026").data.decode()  # viewers can see it
+    flat = " ".join(re.sub(r"<[^>]+>", " ", page).split())
+    assert "3 samples" in flat                       # approved only by default: A, B, L
+    assert "2025 1 0 1" in flat and "2026 1 1 2" in flat   # year rows: Yb, Lu, total
+    assert "Mar 1 1 2" in flat and "Jul 0 0 0" in flat    # months of 2026
+    assert "AL Ana Lyst 0 1 3 0" in flat             # filament, prep, analysis (B counts for both analysts), reviewed
+    assert "RI Rev Iewer 1 1 1 3" in flat            # reviewed all three
+    assert "<svg" in page and "samples per year" in page
+    flat_all = " ".join(re.sub(r"<[^>]+>", " ", client_for(app, "vic").get("/dashboard?all=1").data.decode()).split())
+    assert "4 samples" in flat_all                   # the draft is counted when asked
+    csv_text = ana.get("/dashboard/export.csv?table=people").data.decode()
+    assert "AL,Ana Lyst,0,1,3,0" in csv_text and "not recorded" in csv_text
+    years_csv = ana.get("/dashboard/export.csv?table=years&element=Yb").data.decode()
+    assert years_csv.splitlines() == ["year,Yb,total", "2025,1,1", "2026,1,1"]

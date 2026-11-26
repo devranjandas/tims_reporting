@@ -53,7 +53,7 @@
   .closing { page-break-inside: avoid; }
   .sigs { display: flex; justify-content: space-between; margin: 10mm 0 6mm; }
   .sig { width: 45%; }
-  .sig .lbl { font-weight: bold; margin-bottom: 2mm; }
+  .sig .nm { font-weight: bold; }
   .remarks { margin-bottom: 6mm; }
   .remarks .lbl { font-weight: bold; }
   .remarks .txt { white-space: pre-wrap; }
@@ -142,7 +142,7 @@
 <div class="closing">
 <div class="sigs">
   {% for sig in d.signatories %}
-  <div class="sig"><div class="lbl">{{ sig.label }}</div><div>{{ sig.name }}</div><div>{{ sig.designation }}</div></div>
+  <div class="sig"><div class="nm">{{ sig.name }}</div>{% for k in ('designation', 'division', 'group') %}{% if sig[k] %}<div>{{ sig[k] }}</div>{% endif %}{% endfor %}</div>
   {% endfor %}
 </div>
 

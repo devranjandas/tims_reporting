@@ -304,10 +304,10 @@ def people(ids) -> list[dict]:
 
 
 def people_choices(selected=()) -> list[User]:
-    """Users offered in the sample form: all active users, plus anyone already selected."""
+    """People offered in the sample form: active TIMS workflow persons, plus anyone already selected."""
     selected = {int(i) for i in selected or []}
     users = db.session.scalars(select(User).order_by(User.initials)).all()
-    return [u for u in users if u.active or u.id in selected]
+    return [u for u in users if (u.active and u.in_workflow) or u.id in selected]
 
 
 def parse_date(text: str | None) -> date | None:
